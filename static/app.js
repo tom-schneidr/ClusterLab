@@ -17,6 +17,7 @@ const state = {
   selectedEventSeq: null,
   view: 'hats',
   dirtyTopology: false,
+  editingNodeId: null,
 }
 
 const qs = (id) => document.getElementById(id)
@@ -137,10 +138,7 @@ function renderHatForm() {
   qs('hatFormMode').textContent = hat.id ? `Editing ${hat.id}` : 'New hat'
   qs('hatId').value = hat.id || ''
   qs('hatName').value = hat.name || ''
-  qs('hatIcon').value = hat.icon || ''
   qs('hatColor').value = hat.color || '#42c6ff'
-  qs('hatModel').value = hat.model || 'auto'
-  qs('hatTemp').value = hat.temperature ?? 0.2
   qs('hatRole').value = hat.role || ''
   qs('hatSystem').value = hat.system_prompt || ''
   qs('hatCanWrite').checked = Boolean(hat.can_write_blackboard)
@@ -159,11 +157,11 @@ async function saveHat(event) {
     name: qs('hatName').value.trim(),
     role: qs('hatRole').value.trim(),
     system_prompt: qs('hatSystem').value.trim(),
-    model: qs('hatModel').value.trim() || 'auto',
-    temperature: Number(qs('hatTemp').value || 0.2),
+    model: 'auto',
+    temperature: 0.2,
     tools,
     color: qs('hatColor').value,
-    icon: qs('hatIcon').value.trim() || 'spark',
+    icon: 'spark',
     can_write_blackboard: qs('hatCanWrite').checked,
     can_prompt_hats: qs('hatCanPrompt').checked,
   }
@@ -188,13 +186,11 @@ async function deleteHat() {
 
 function renderTopologyControls() {
   if (!state.activeTopology && state.topologies.length) state.activeTopology = state.topologies[0]
-  const topology = state.activeTopology || { id: '', name: 'Untitled topology', activation_policy: 'fixed_sequence', nodes: [], edges: [] }
+  const topology = state.activeTopology || { id: '', name: 'Untitled topology', nodes: [], edges: [] }
   qs('topologySelect').innerHTML = state.topologies.map((top) => (
     `<option value="${escapeHtml(top.id)}" ${top.id === topology.id ? 'selected' : ''}>${escapeHtml(top.name)}</option>`
   )).join('')
   qs('topologyName').value = topology.name || ''
-  qs('topologyPolicy').value = topology.activation_policy || 'fixed_sequence'
-  qs('policySelect').value = topology.activation_policy || 'fixed_sequence'
   qs('topologySavedState').textContent = state.dirtyTopology ? 'Unsaved changes' : 'Loaded'
 
   const existing = new Set(activeNodes().map((node) => node.hat_id))
@@ -234,7 +230,6 @@ function newTopology() {
   state.activeTopology = {
     id: null,
     name: 'New Cognitive Cluster',
-    activation_policy: 'critic_verifier_gate',
     nodes: [],
     edges: [],
   }
@@ -247,7 +242,6 @@ async function saveTopology() {
   const topology = state.activeTopology
   if (!topology) return
   topology.name = qs('topologyName').value.trim() || 'Untitled topology'
-  topology.activation_policy = qs('topologyPolicy').value
   const saved = topology.id
     ? await api(`/api/topologies/${encodeURIComponent(topology.id)}`, { method: 'PUT', body: JSON.stringify(topology) })
     : await api('/api/topologies', { method: 'POST', body: JSON.stringify(topology) })
@@ -309,6 +303,86 @@ function removeEdge(edgeId) {
   topologyChanged()
 }
 
+function selectNode(hatId) {
+  state.selectedNodeId = hatId
+  state.selectedHatId = hatId
+  document.querySelectorAll('.graph-node').forEach((item) => {
+    item.classList.toggle('selected', item.dataset.hatId === hatId)
+  })
+  const label = hatId ? (hatById(hatId)?.name || hatId) : 'No node selected'
+  qs('selectedNodeLabel').textContent = label
+  qs('openNodeDetailBtn').disabled = !hatId
+}
+
+function nodeByHatId(hatId) {
+  return activeNodes().find((node) => node.hat_id === hatId)
+}
+
+function openNodeDetail(hatId) {
+  const node = nodeByHatId(hatId)
+  const hat = hatById(hatId)
+  if (!node || !hat) return
+  selectNode(hatId)
+  state.editingNodeId = hatId
+
+  qs('nodeDetailTitle').textContent = hat.name || hat.id
+  qs('nodeDetailMeta').textContent = `Node ${hat.id}`
+  qs('nodeDetailHatId').value = hat.id
+  qs('nodeDetailName').value = hat.name || ''
+  qs('nodeDetailColor').value = hat.color || '#42c6ff'
+  qs('nodeDetailX').value = Math.round(Number(node.x) || 20)
+  qs('nodeDetailY').value = Math.round(Number(node.y) || 20)
+  qs('nodeDetailRole').value = hat.role || ''
+  qs('nodeDetailSystem').value = hat.system_prompt || ''
+  qs('nodeDetailCanWrite').checked = Boolean(hat.can_write_blackboard)
+  qs('nodeDetailCanPrompt').checked = Boolean(hat.can_prompt_hats)
+  qs('nodeDetailTools').innerHTML = TOOL_IDS.map((tool) => `
+    <label><input type="checkbox" value="${tool}" ${hat.tools?.includes(tool) ? 'checked' : ''}> ${tool}</label>
+  `).join('')
+
+  const dialog = qs('nodeDetailDialog')
+  if (!dialog.open) dialog.showModal()
+  qs('nodeDetailName').focus()
+}
+
+function closeNodeDetail() {
+  state.editingNodeId = null
+  const dialog = qs('nodeDetailDialog')
+  if (dialog.open) dialog.close()
+}
+
+async function saveNodeDetail(event) {
+  event.preventDefault()
+  const id = qs('nodeDetailHatId').value.trim()
+  const node = nodeByHatId(id)
+  if (!id || !node) return
+  const tools = [...qs('nodeDetailTools').querySelectorAll('input:checked')].map((input) => input.value)
+  const body = {
+    id,
+    name: qs('nodeDetailName').value.trim(),
+    role: qs('nodeDetailRole').value.trim(),
+    system_prompt: qs('nodeDetailSystem').value.trim(),
+    model: 'auto',
+    temperature: 0.2,
+    tools,
+    color: qs('nodeDetailColor').value,
+    icon: 'spark',
+    can_write_blackboard: qs('nodeDetailCanWrite').checked,
+    can_prompt_hats: qs('nodeDetailCanPrompt').checked,
+  }
+  node.x = Math.max(20, Math.min(760, Number(qs('nodeDetailX').value || node.x)))
+  node.y = Math.max(20, Math.min(580, Number(qs('nodeDetailY').value || node.y)))
+
+  const saved = await api(`/api/hats/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(body) })
+  const idx = state.hats.findIndex((item) => item.id === saved.id)
+  if (idx >= 0) state.hats[idx] = saved
+  state.selectedHatId = saved.id
+  state.selectedNodeId = saved.id
+  state.dirtyTopology = true
+  closeNodeDetail()
+  renderAll()
+}
+
 function renderGraph() {
   const svg = qs('graphSvg')
   const marker = svg.querySelector('defs')?.outerHTML || ''
@@ -343,15 +417,24 @@ function renderGraph() {
       <text class="role" x="14" y="48">${escapeHtml(short(hat.role || hat.id, 24))}</text>
     `
     g.addEventListener('pointerdown', startDrag)
-    g.addEventListener('click', () => {
-      state.selectedNodeId = node.hat_id
-      state.selectedHatId = node.hat_id
-      renderAll()
+    g.addEventListener('click', (event) => {
+      if (event.detail >= 2) {
+        event.preventDefault()
+        openNodeDetail(node.hat_id)
+        return
+      }
+      selectNode(node.hat_id)
+    })
+    g.addEventListener('dblclick', (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      openNodeDetail(node.hat_id)
     })
     svg.appendChild(g)
   }
   const label = state.selectedNodeId ? (hatById(state.selectedNodeId)?.name || state.selectedNodeId) : 'No node selected'
   qs('selectedNodeLabel').textContent = label
+  qs('openNodeDetailBtn').disabled = !state.selectedNodeId
 }
 
 let drag = null
@@ -361,7 +444,7 @@ function startDrag(event) {
   const hatId = event.currentTarget.dataset.hatId
   const node = activeNodes().find((item) => item.hat_id === hatId)
   if (!node) return
-  state.selectedNodeId = hatId
+  selectNode(hatId)
   drag = {
     hatId,
     startClientX: event.clientX,
@@ -397,8 +480,6 @@ async function runCluster() {
   const body = {
     topology_id: state.activeTopology.id,
     task,
-    activation_policy: qs('policySelect').value,
-    mode: qs('modeSelect').value,
     max_turns: 12,
   }
   qs('runBtn').textContent = 'Running...'
@@ -469,8 +550,6 @@ function renderRunSummary(run, events) {
     <div class="metric"><span>Status</span><strong>${escapeHtml(run.status)}</strong></div>
     <div class="metric"><span>Events</span><strong>${events.length}</strong></div>
     <div class="metric"><span>Tokens</span><strong>${totalTokens || '0 placeholder'}</strong></div>
-    <div class="metric"><span>Policy</span><strong>${escapeHtml(run.activation_policy)}</strong></div>
-    <div class="metric"><span>Mode</span><strong>${escapeHtml(run.mode)}</strong></div>
     <div class="metric"><span>Cost</span><strong>$${totalCost.toFixed(4)} placeholder</strong></div>
   `
 }
@@ -516,23 +595,20 @@ function bindControls() {
     state.dirtyTopology = true
     renderTopologyControls()
   })
-  qs('topologyPolicy').addEventListener('change', () => {
-    if (!state.activeTopology) return
-    state.activeTopology.activation_policy = qs('topologyPolicy').value
-    qs('policySelect').value = qs('topologyPolicy').value
-    topologyChanged()
-  })
-  qs('policySelect').addEventListener('change', () => {
-    if (!state.activeTopology) return
-    state.activeTopology.activation_policy = qs('policySelect').value
-    qs('topologyPolicy').value = qs('policySelect').value
-    topologyChanged()
-  })
   qs('saveTopologyBtn').addEventListener('click', saveTopology)
   qs('newTopologyBtn').addEventListener('click', newTopology)
   qs('addNodeBtn').addEventListener('click', addNode)
   qs('removeNodeBtn').addEventListener('click', removeNode)
   qs('addEdgeBtn').addEventListener('click', addEdge)
+  qs('openNodeDetailBtn').addEventListener('click', () => {
+    if (state.selectedNodeId) openNodeDetail(state.selectedNodeId)
+  })
+  qs('nodeDetailForm').addEventListener('submit', saveNodeDetail)
+  qs('closeNodeDetailBtn').addEventListener('click', closeNodeDetail)
+  qs('cancelNodeDetailBtn').addEventListener('click', closeNodeDetail)
+  qs('nodeDetailDialog').addEventListener('click', (event) => {
+    if (event.target === qs('nodeDetailDialog')) closeNodeDetail()
+  })
   qs('runBtn').addEventListener('click', runCluster)
   qs('stopBtn').addEventListener('click', stopRun)
   qs('resetRunBtn').addEventListener('click', resetRun)

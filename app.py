@@ -48,7 +48,6 @@ class HatDefinitionIn(BaseModel):
 class TopologyIn(BaseModel):
     id: str | None = None
     name: str = Field(min_length=1, max_length=120)
-    activation_policy: str = "fixed_sequence"
     nodes: list[dict[str, Any]] = Field(default_factory=list)
     edges: list[dict[str, Any]] = Field(default_factory=list)
 
@@ -56,8 +55,6 @@ class TopologyIn(BaseModel):
 class RunStartIn(BaseModel):
     topology_id: str
     task: str = Field(min_length=1, max_length=12000)
-    activation_policy: str | None = None
-    mode: str = "mock"
     max_turns: int = Field(default=12, ge=1, le=32)
 
 
@@ -74,10 +71,8 @@ def bootstrap() -> dict[str, Any]:
         "runs": store.list_runs(limit=20),
         "llm": {
             "base_url": os.getenv("FREEROUTER_BASE_URL")
-            or os.getenv("OPENAI_BASE_URL")
             or "http://localhost:8000/v1",
             "default_model": os.getenv("FREEROUTER_MODEL")
-            or os.getenv("OPENAI_MODEL")
             or "auto",
         },
     }
@@ -140,8 +135,6 @@ def start_run(body: RunStartIn) -> dict[str, Any]:
         topology=topology,
         hats=hats,
         task=body.task,
-        activation_policy=body.activation_policy or topology.get("activation_policy"),
-        mode=body.mode,
         max_turns=body.max_turns,
     )
     return run

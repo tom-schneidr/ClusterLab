@@ -35,12 +35,10 @@ http://127.0.0.1:8765
 
 ## LLM Configuration
 
-Mock mode works without credentials.
-
-Live mode uses an OpenAI-compatible FreeRouter endpoint configured with:
+ClusterLab runs against an OpenAI-compatible FreeRouter endpoint configured with:
 
 - `FREEROUTER_BASE_URL`
 - `FREEROUTER_API_KEY`
 - `FREEROUTER_MODEL`
 
-Copy `.env.example` to `.env` and fill in the values needed for live mode.
+Copy `.env.example` to `.env` and fill in the values.

@@ -121,7 +121,6 @@ DEFAULT_HATS: list[dict] = [
 DEFAULT_TOPOLOGY: dict = {
     "id": "default_pm_cluster",
     "name": "Project Manager Brain Cluster",
-    "activation_policy": "critic_verifier_gate",
     "nodes": [
         {"hat_id": "executive", "x": 360, "y": 70},
         {"hat_id": "context_keeper", "x": 130, "y": 210},

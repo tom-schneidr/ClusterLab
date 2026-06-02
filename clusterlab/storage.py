@@ -44,8 +44,6 @@ class ClusterStore:
                     topology_id text not null,
                     status text not null,
                     task text not null,
-                    activation_policy text not null,
-                    mode text not null,
                     blackboard_json text not null,
                     final_result text not null,
                     created_at text not null,
@@ -149,8 +147,6 @@ class ClusterStore:
         *,
         topology_id: str,
         task: str,
-        activation_policy: str,
-        mode: str,
         blackboard: dict[str, Any],
     ) -> dict[str, Any]:
         run = {
@@ -158,8 +154,6 @@ class ClusterStore:
             "topology_id": topology_id,
             "status": "running",
             "task": task,
-            "activation_policy": activation_policy,
-            "mode": mode,
             "blackboard": blackboard,
             "final_result": "",
             "created_at": now_iso(),
@@ -169,16 +163,14 @@ class ClusterStore:
             conn.execute(
                 """
                 insert into runs
-                    (id, topology_id, status, task, activation_policy, mode, blackboard_json, final_result, created_at, updated_at)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (id, topology_id, status, task, blackboard_json, final_result, created_at, updated_at)
+                values (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     run["id"],
                     topology_id,
                     run["status"],
                     task,
-                    activation_policy,
-                    mode,
                     json.dumps(blackboard, sort_keys=True),
                     "",
                     run["created_at"],
@@ -286,8 +278,6 @@ def run_from_row(row: sqlite3.Row) -> dict[str, Any]:
         "topology_id": row["topology_id"],
         "status": row["status"],
         "task": row["task"],
-        "activation_policy": row["activation_policy"],
-        "mode": row["mode"],
         "blackboard": json.loads(row["blackboard_json"] or "{}"),
         "final_result": row["final_result"],
         "created_at": row["created_at"],

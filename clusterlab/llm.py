@@ -14,24 +14,23 @@ class LlmResult:
     content: str
     usage: dict[str, Any] = field(default_factory=dict)
     cost_usd: float = 0.0
-    provider_status: str = "mock"
+    provider_status: str = "pending"
     error: str = ""
 
 
 def default_model() -> str:
-    return os.getenv("FREEROUTER_MODEL") or os.getenv("OPENAI_MODEL") or "auto"
+    return os.getenv("FREEROUTER_MODEL") or "auto"
 
 
 def base_url() -> str:
     return (
         os.getenv("FREEROUTER_BASE_URL")
-        or os.getenv("OPENAI_BASE_URL")
         or "http://localhost:8000/v1"
     ).rstrip("/")
 
 
 def api_key() -> str:
-    return os.getenv("FREEROUTER_API_KEY") or os.getenv("OPENAI_API_KEY") or "local"
+    return os.getenv("FREEROUTER_API_KEY") or "local"
 
 
 def call_llm(
@@ -71,6 +70,6 @@ def call_llm(
             content="",
             usage={"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
             cost_usd=0.0,
-            provider_status="fallback",
+            provider_status="error",
             error=str(exc),
         )

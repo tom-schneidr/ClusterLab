@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ClusterLab</title>
-  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/styles.css?v=20260602-node-dialog-style">
 </head>
 <body>
   <div class="shell">
@@ -38,21 +38,6 @@
           <textarea id="taskInput" rows="2">Design a project manager cluster that can delegate implementation work, critique the result, verify evidence, and save memory candidates.</textarea>
         </div>
         <div class="run-controls">
-          <label>
-            Activation
-            <select id="policySelect">
-              <option value="fixed_sequence">Fixed sequence</option>
-              <option value="supervisor_chooses">Supervisor chooses next speaker</option>
-              <option value="critic_verifier_gate">Critic/verifier gate before final answer</option>
-            </select>
-          </label>
-          <label>
-            Mode
-            <select id="modeSelect">
-              <option value="mock">Mock</option>
-              <option value="live">Live FreeRouter</option>
-            </select>
-          </label>
           <button id="runBtn" class="primary">Run Cluster</button>
           <button id="stopBtn">Stop</button>
           <button id="resetRunBtn">Reset</button>
@@ -80,13 +65,10 @@
               <h3>Hat Definition</h3>
               <span id="hatFormMode">Editing</span>
             </div>
-            <form id="hatForm" class="form-grid">
-              <input type="hidden" id="hatId">
+              <form id="hatForm" class="form-grid">
+                <input type="hidden" id="hatId">
               <label>Name <input id="hatName" required></label>
-              <label>Icon <input id="hatIcon" placeholder="compass"></label>
               <label>Color <input id="hatColor" type="color"></label>
-              <label>Model <input id="hatModel" placeholder="auto"></label>
-              <label>Temperature <input id="hatTemp" type="number" min="0" max="2" step="0.05"></label>
               <label class="wide">Short role / purpose <textarea id="hatRole" rows="3"></textarea></label>
               <label class="wide">System prompt <textarea id="hatSystem" rows="8"></textarea></label>
               <fieldset class="wide">
@@ -113,11 +95,6 @@
             </div>
             <label>Load preset <select id="topologySelect"></select></label>
             <label>Name <input id="topologyName"></label>
-            <label>Activation policy <select id="topologyPolicy">
-              <option value="fixed_sequence">Fixed sequence</option>
-              <option value="supervisor_chooses">Supervisor chooses next speaker</option>
-              <option value="critic_verifier_gate">Critic/verifier gate before final answer</option>
-            </select></label>
             <div class="button-row">
               <button id="saveTopologyBtn" class="primary">Save</button>
               <button id="newTopologyBtn">New Preset</button>
@@ -139,7 +116,10 @@
                 <h3>Cluster Canvas</h3>
                 <p>Drag hats to change layout. Directed edges define allowed influence or prompt paths.</p>
               </div>
-              <span id="selectedNodeLabel">No node selected</span>
+              <div class="selected-node-actions">
+                <span id="selectedNodeLabel">No node selected</span>
+                <button id="openNodeDetailBtn" type="button" disabled>Open Details</button>
+              </div>
             </div>
             <svg id="graphSvg" viewBox="0 0 900 650" role="img" aria-label="Cluster topology graph">
               <defs>
@@ -180,6 +160,34 @@
       </section>
     </main>
   </div>
-  <script src="/static/app.js"></script>
+  <dialog id="nodeDetailDialog" class="node-dialog" aria-labelledby="nodeDetailTitle">
+    <div class="modal-head">
+      <div>
+        <h3 id="nodeDetailTitle">Node Detail</h3>
+        <p id="nodeDetailMeta">No node selected</p>
+      </div>
+      <button id="closeNodeDetailBtn" type="button">Close</button>
+    </div>
+    <form id="nodeDetailForm" class="form-grid">
+      <input type="hidden" id="nodeDetailHatId">
+      <label>Name <input id="nodeDetailName" required></label>
+      <label>Color <input id="nodeDetailColor" type="color"></label>
+      <label>X <input id="nodeDetailX" type="number" min="20" max="760" step="1"></label>
+      <label>Y <input id="nodeDetailY" type="number" min="20" max="580" step="1"></label>
+      <label class="wide">Short role / purpose <textarea id="nodeDetailRole" rows="3"></textarea></label>
+      <label class="wide">System prompt <textarea id="nodeDetailSystem" rows="8"></textarea></label>
+      <fieldset class="wide">
+        <legend>Tool permissions</legend>
+        <div id="nodeDetailTools" class="checks"></div>
+      </fieldset>
+      <label class="toggle"><input id="nodeDetailCanWrite" type="checkbox"> Can write to blackboard</label>
+      <label class="toggle"><input id="nodeDetailCanPrompt" type="checkbox"> Can prompt other hats</label>
+      <div class="form-actions wide">
+        <button type="submit" class="primary">Save Details</button>
+        <button type="button" id="cancelNodeDetailBtn">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+  <script src="/static/app.js?v=20260602-node-dialog"></script>
 </body>
 </html>
