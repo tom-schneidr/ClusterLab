@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ClusterLab</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">CL</div>
+        <div>
+          <h1>ClusterLab</h1>
+          <p>Cognitive cluster workbench</p>
+        </div>
+      </div>
+      <nav class="nav">
+        <button class="nav-btn active" data-view="hats">Hats</button>
+        <button class="nav-btn" data-view="topology">Topology</button>
+        <button class="nav-btn" data-view="analysis">Run Analysis</button>
+      </nav>
+      <div class="sidebar-status">
+        <span>LLM route</span>
+        <strong id="llmRoute">Loading</strong>
+      </div>
+      <div class="sidebar-status">
+        <span>Current run</span>
+        <strong id="runStatus">No run yet</strong>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="task-field">
+          <label for="taskInput">Task / goal</label>
+          <textarea id="taskInput" rows="2">Design a project manager cluster that can delegate implementation work, critique the result, verify evidence, and save memory candidates.</textarea>
+        </div>
+        <div class="run-controls">
+          <label>
+            Activation
+            <select id="policySelect">
+              <option value="fixed_sequence">Fixed sequence</option>
+              <option value="supervisor_chooses">Supervisor chooses next speaker</option>
+              <option value="critic_verifier_gate">Critic/verifier gate before final answer</option>
+            </select>
+          </label>
+          <label>
+            Mode
+            <select id="modeSelect">
+              <option value="mock">Mock</option>
+              <option value="live">Live FreeRouter</option>
+            </select>
+          </label>
+          <button id="runBtn" class="primary">Run Cluster</button>
+          <button id="stopBtn">Stop</button>
+          <button id="resetRunBtn">Reset</button>
+        </div>
+      </header>
+
+      <section id="view-hats" class="view active">
+        <div class="view-head">
+          <div>
+            <h2>Hats</h2>
+            <p>Define the mental functions that can participate in a single role cluster.</p>
+          </div>
+          <button id="newHatBtn">New Hat</button>
+        </div>
+        <div class="hats-grid">
+          <section class="panel">
+            <div class="panel-head">
+              <h3>Library</h3>
+              <span id="hatCount">0 hats</span>
+            </div>
+            <div id="hatList" class="hat-list"></div>
+          </section>
+          <section class="panel inspector-panel">
+            <div class="panel-head">
+              <h3>Hat Definition</h3>
+              <span id="hatFormMode">Editing</span>
+            </div>
+            <form id="hatForm" class="form-grid">
+              <input type="hidden" id="hatId">
+              <label>Name <input id="hatName" required></label>
+              <label>Icon <input id="hatIcon" placeholder="compass"></label>
+              <label>Color <input id="hatColor" type="color"></label>
+              <label>Model <input id="hatModel" placeholder="auto"></label>
+              <label>Temperature <input id="hatTemp" type="number" min="0" max="2" step="0.05"></label>
+              <label class="wide">Short role / purpose <textarea id="hatRole" rows="3"></textarea></label>
+              <label class="wide">System prompt <textarea id="hatSystem" rows="8"></textarea></label>
+              <fieldset class="wide">
+                <legend>Tool permissions</legend>
+                <div id="toolChecks" class="checks"></div>
+              </fieldset>
+              <label class="toggle"><input id="hatCanWrite" type="checkbox"> Can write to blackboard</label>
+              <label class="toggle"><input id="hatCanPrompt" type="checkbox"> Can prompt other hats</label>
+              <div class="form-actions wide">
+                <button type="submit" class="primary">Save Hat</button>
+                <button type="button" id="deleteHatBtn" class="danger">Delete Hat</button>
+              </div>
+            </form>
+          </section>
+        </div>
+      </section>
+
+      <section id="view-topology" class="view">
+        <div class="topology-layout">
+          <section class="panel topology-controls">
+            <div class="panel-head">
+              <h3>Topology Preset</h3>
+              <span id="topologySavedState">Loaded</span>
+            </div>
+            <label>Load preset <select id="topologySelect"></select></label>
+            <label>Name <input id="topologyName"></label>
+            <label>Activation policy <select id="topologyPolicy">
+              <option value="fixed_sequence">Fixed sequence</option>
+              <option value="supervisor_chooses">Supervisor chooses next speaker</option>
+              <option value="critic_verifier_gate">Critic/verifier gate before final answer</option>
+            </select></label>
+            <div class="button-row">
+              <button id="saveTopologyBtn" class="primary">Save</button>
+              <button id="newTopologyBtn">New Preset</button>
+            </div>
+            <div class="divider"></div>
+            <label>Add hat <select id="addHatSelect"></select></label>
+            <button id="addNodeBtn">Add To Canvas</button>
+            <button id="removeNodeBtn" class="danger">Remove Selected</button>
+            <div class="divider"></div>
+            <label>From <select id="edgeSource"></select></label>
+            <label>To <select id="edgeTarget"></select></label>
+            <button id="addEdgeBtn">Connect</button>
+            <div id="edgeList" class="edge-list"></div>
+          </section>
+
+          <section class="panel canvas-panel">
+            <div class="canvas-head">
+              <div>
+                <h3>Cluster Canvas</h3>
+                <p>Drag hats to change layout. Directed edges define allowed influence or prompt paths.</p>
+              </div>
+              <span id="selectedNodeLabel">No node selected</span>
+            </div>
+            <svg id="graphSvg" viewBox="0 0 900 650" role="img" aria-label="Cluster topology graph">
+              <defs>
+                <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M 0 0 L 10 5 L 0 10 z"></path>
+                </marker>
+              </defs>
+            </svg>
+          </section>
+        </div>
+      </section>
+
+      <section id="view-analysis" class="view">
+        <div class="analysis-layout">
+          <section class="panel trace-panel">
+            <div class="panel-head">
+              <h3>Chronological Turn Trace</h3>
+              <span id="eventCount">0 events</span>
+            </div>
+            <div id="traceList" class="trace-list"></div>
+          </section>
+          <section class="panel detail-panel">
+            <div class="panel-head">
+              <h3>Run Detail</h3>
+              <span id="detailStatus">Idle</span>
+            </div>
+            <div id="runSummary" class="run-summary"></div>
+            <div class="detail-section">
+              <h4>Selected Event</h4>
+              <pre id="eventDetail">Run the cluster to inspect prompts, outputs, blackboard changes, decisions, objections, and checks.</pre>
+            </div>
+            <div class="detail-section">
+              <h4>Final Result</h4>
+              <pre id="finalResult">No result yet.</pre>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
