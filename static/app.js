@@ -7,6 +7,167 @@ const TOOL_IDS = [
   'shell',
 ]
 
+const NODE_TYPES = [
+  { id: 'hat', label: 'Hat' },
+  { id: 'store', label: 'Store' },
+  { id: 'gate', label: 'Gate' },
+  { id: 'tool', label: 'Tool' },
+  { id: 'output', label: 'Output' },
+]
+
+const EDGE_TYPES = [
+  { id: 'context', label: 'Context Flow' },
+  { id: 'delegation', label: 'Delegation' },
+  { id: 'review', label: 'Review Gate' },
+  { id: 'state', label: 'State Read/Write' },
+  { id: 'escalation', label: 'Escalation' },
+  { id: 'approval', label: 'Approval' },
+]
+
+const AUTHORITY_IDS = [
+  'route',
+  'revise_plan',
+  'delegate',
+  'execute',
+  'write_state',
+  'interrupt',
+  'request_revision',
+  'request_evidence',
+  'verify',
+  'block',
+  'final_approval',
+  'write_memory',
+]
+
+const VISIBILITY_IDS = [
+  'full_blackboard',
+  'task_packet_and_blackboard',
+  'work_product',
+  'work_product_and_blackboard',
+  'work_product_and_evidence',
+  'trace_and_blackboard',
+  'shared_state',
+  'curated_state',
+  'approved_result',
+]
+
+const STRUCTURAL_GROUPS = [
+  {
+    title: 'Stores',
+    items: [
+      {
+        template_id: 'blackboard',
+        type: 'store',
+        name: 'Blackboard',
+        role: 'Shared facts, assumptions, constraints, evidence, objections, and decisions.',
+        color: '#9fb7ff',
+        store_key: 'blackboard',
+        visibility: 'shared_state',
+        output_contract: 'Readable shared state snapshot.',
+      },
+      {
+        template_id: 'task_ledger',
+        type: 'store',
+        name: 'Task Ledger',
+        role: 'Task packets, dependencies, acceptance checks, and revision requests.',
+        color: '#7ddc82',
+        store_key: 'task_packets',
+        visibility: 'shared_state',
+        output_contract: 'Ordered task packet state.',
+      },
+      {
+        template_id: 'evidence_store',
+        type: 'store',
+        name: 'Evidence Store',
+        role: 'Artifacts, tests, citations, screenshots, logs, and proof material.',
+        color: '#2bd9a3',
+        store_key: 'evidence',
+        visibility: 'shared_state',
+        output_contract: 'Evidence items with provenance.',
+      },
+      {
+        template_id: 'memory_store',
+        type: 'store',
+        name: 'Memory Store',
+        role: 'Durable memory candidates and procedural improvements.',
+        color: '#f78c6b',
+        store_key: 'memory_candidates',
+        visibility: 'curated_state',
+        output_contract: 'Memory records with provenance and confidence.',
+      },
+    ],
+  },
+  {
+    title: 'Gates',
+    items: [
+      {
+        template_id: 'critic_gate',
+        type: 'gate',
+        name: 'Critic Gate',
+        role: 'Blocks shallow completion by forcing adversarial review.',
+        color: '#ff6b6b',
+        authority: ['block', 'request_revision'],
+        visibility: 'work_product',
+        output_contract: 'Pass, revise, or escalate with concrete defects.',
+      },
+      {
+        template_id: 'verifier_gate',
+        type: 'gate',
+        name: 'Verifier Gate',
+        role: 'Requires evidence before final approval.',
+        color: '#2bd9a3',
+        authority: ['block', 'request_evidence'],
+        visibility: 'work_product_and_evidence',
+        output_contract: 'Pass/fail verdict and unresolved proof gaps.',
+      },
+      {
+        template_id: 'approval_gate',
+        type: 'gate',
+        name: 'Approval Gate',
+        role: 'Forces an explicit final decision before user-facing output.',
+        color: '#42c6ff',
+        authority: ['block', 'final_approval'],
+        visibility: 'approved_result',
+        output_contract: 'Approve, revise, or ask for more information.',
+      },
+    ],
+  },
+  {
+    title: 'Tools',
+    items: [
+      {
+        template_id: 'live_api_tool',
+        type: 'tool',
+        name: 'Live API Tool',
+        role: 'Represents live external execution through the configured FreeRouter route.',
+        color: '#ffd166',
+        tools: ['web_search', 'shell'],
+        visibility: 'task_packet_and_blackboard',
+        output_contract: 'Tool result, error, or evidence item.',
+      },
+    ],
+  },
+  {
+    title: 'Outputs',
+    items: [
+      {
+        template_id: 'final_output',
+        type: 'output',
+        name: 'Final Output',
+        role: 'User-facing result after review, verification, and executive approval.',
+        color: '#42c6ff',
+        visibility: 'approved_result',
+        output_contract: 'Clean final answer without internal trace noise.',
+      },
+    ],
+  },
+]
+
+const NODE_WIDTH = 156
+const NODE_HEIGHT = 66
+const GRAPH_MAX_X = 760
+const GRAPH_MAX_Y = 580
+
 const state = {
   hats: [],
   topologies: [],
@@ -14,6 +175,7 @@ const state = {
   selectedHatId: null,
   selectedNodeId: null,
   selectedEdgeId: null,
+  newEdgeType: 'context',
   currentRun: null,
   selectedEventSeq: null,
   view: 'hats',
@@ -64,6 +226,46 @@ function activeEdges() {
   return state.activeTopology?.edges || []
 }
 
+function nodeById(id) {
+  return activeNodes().find((node) => node.id === id)
+}
+
+function edgeById(id) {
+  return activeEdges().find((edge) => edge.id === id)
+}
+
+function hatForNode(node) {
+  return node?.type === 'hat' ? hatById(node.hat_id) : null
+}
+
+function nodeName(node) {
+  if (!node) return ''
+  return node.name || hatForNode(node)?.name || node.id || 'Node'
+}
+
+function nodeRole(node) {
+  if (!node) return ''
+  return node.role || hatForNode(node)?.role || node.type || ''
+}
+
+function nodeColor(node) {
+  if (node?.color) return node.color
+  if (node?.type === 'hat') return hatForNode(node)?.color || '#42c6ff'
+  if (node?.type === 'store') return '#9fb7ff'
+  if (node?.type === 'gate') return '#ff6b6b'
+  if (node?.type === 'tool') return '#ffd166'
+  if (node?.type === 'output') return '#42c6ff'
+  return '#42c6ff'
+}
+
+function typeLabel(type) {
+  return NODE_TYPES.find((item) => item.id === type)?.label || type || 'Node'
+}
+
+function edgeTypeLabel(type) {
+  return EDGE_TYPES.find((item) => item.id === type)?.label || type || 'Context Flow'
+}
+
 function setView(name) {
   state.view = name
   document.querySelectorAll('.nav-btn').forEach((btn) => {
@@ -83,8 +285,8 @@ function bindNav() {
 async function bootstrap() {
   const data = await api('/api/bootstrap')
   state.hats = data.hats
-  state.topologies = data.topologies
-  state.activeTopology = data.topologies[0]
+  state.topologies = data.topologies.filter((topology) => topology.schema_version === 2)
+  state.activeTopology = JSON.parse(JSON.stringify(state.topologies[0] || blankTopology()))
   state.selectedHatId = state.hats[0]?.id || null
   qs('llmRoute').textContent = `${data.llm.default_model} @ ${data.llm.base_url}`
   renderAll()
@@ -185,34 +387,203 @@ async function deleteHat() {
   renderAll()
 }
 
+function blankTopology() {
+  return {
+    schema_version: 2,
+    id: null,
+    name: 'New General Super Agent Cluster',
+    nodes: [],
+    edges: [],
+  }
+}
+
 function renderTopologyControls() {
-  if (!state.activeTopology && state.topologies.length) state.activeTopology = state.topologies[0]
-  const topology = state.activeTopology || { id: '', name: 'Untitled topology', nodes: [], edges: [] }
+  if (!state.activeTopology && state.topologies.length) {
+    state.activeTopology = JSON.parse(JSON.stringify(state.topologies[0]))
+  }
+  const topology = state.activeTopology || blankTopology()
   qs('topologySelect').innerHTML = state.topologies.map((top) => (
     `<option value="${escapeHtml(top.id)}" ${top.id === topology.id ? 'selected' : ''}>${escapeHtml(top.name)}</option>`
   )).join('')
   qs('topologyName').value = topology.name || ''
   qs('topologySavedState').textContent = state.dirtyTopology ? 'Unsaved changes' : 'Loaded'
+  qs('newEdgeType').innerHTML = EDGE_TYPES.map((type) => (
+    `<option value="${escapeHtml(type.id)}" ${type.id === state.newEdgeType ? 'selected' : ''}>${escapeHtml(type.label)}</option>`
+  )).join('')
+  renderNodePalette()
+  renderSelectionInspector()
+  renderValidation()
+}
 
-  const existing = new Set(activeNodes().map((node) => node.hat_id))
-  qs('hatPalette').innerHTML = state.hats.map((hat) => {
-    const placed = existing.has(hat.id)
-    return `
-      <div class="palette-hat ${placed ? 'disabled' : ''}" draggable="${placed ? 'false' : 'true'}" data-hat-id="${escapeHtml(hat.id)}">
-        <span class="palette-dot" style="background:${escapeHtml(hat.color || '#42c6ff')}"></span>
-        <div>
-          <strong>${escapeHtml(hat.name)}</strong>
-          <p>${escapeHtml(short(hat.role || hat.id, 72))}</p>
-        </div>
-      </div>
-    `
-  }).join('')
-  qs('hatPalette').querySelectorAll('.palette-hat:not(.disabled)').forEach((item) => {
+function renderNodePalette() {
+  const hatItems = state.hats.map((hat) => ({
+    kind: 'hat',
+    hat_id: hat.id,
+    name: hat.name,
+    role: hat.role,
+    color: hat.color || '#42c6ff',
+  }))
+  const groups = [
+    { title: 'Hats', items: hatItems },
+    ...STRUCTURAL_GROUPS.map((group) => ({
+      title: group.title,
+      items: group.items.map((item) => ({ kind: 'template', ...item })),
+    })),
+  ]
+  qs('nodePalette').innerHTML = groups.map((group) => `
+    <div class="palette-group">
+      <h5>${escapeHtml(group.title)}</h5>
+      ${group.items.map((item) => renderPaletteItem(item)).join('')}
+    </div>
+  `).join('')
+  qs('nodePalette').querySelectorAll('.palette-node:not(.disabled)').forEach((item) => {
     item.addEventListener('dragstart', (event) => {
-      event.dataTransfer.setData('text/plain', item.dataset.hatId)
+      const payload = JSON.parse(item.dataset.payload)
+      event.dataTransfer.setData('application/json', JSON.stringify(payload))
+      event.dataTransfer.setData('text/plain', JSON.stringify(payload))
       event.dataTransfer.effectAllowed = 'copy'
     })
   })
+}
+
+function renderPaletteItem(item) {
+  const placed = paletteItemPlaced(item)
+  const payload = item.kind === 'hat'
+    ? { kind: 'hat', hat_id: item.hat_id }
+    : { kind: 'template', template_id: item.template_id }
+  return `
+    <div class="palette-node ${placed ? 'disabled' : ''}" draggable="${placed ? 'false' : 'true'}" data-payload="${escapeHtml(JSON.stringify(payload))}">
+      <span class="palette-dot" style="background:${escapeHtml(item.color || '#42c6ff')}"></span>
+      <div>
+        <strong>${escapeHtml(item.name)}</strong>
+        <p>${escapeHtml(short(item.role || item.template_id || item.hat_id, 72))}</p>
+      </div>
+    </div>
+  `
+}
+
+function paletteItemPlaced(item) {
+  if (item.kind === 'hat') {
+    return activeNodes().some((node) => node.type === 'hat' && node.hat_id === item.hat_id)
+  }
+  return activeNodes().some((node) => node.template_id === item.template_id || node.id === item.template_id)
+}
+
+function renderSelectionInspector() {
+  const inspector = qs('selectionInspector')
+  const edge = edgeById(state.selectedEdgeId)
+  const node = nodeById(state.selectedNodeId)
+  if (edge) {
+    const source = nodeById(edge.source)
+    const target = nodeById(edge.target)
+    inspector.innerHTML = `
+      <div class="selection-card">
+        <strong>${escapeHtml(nodeName(source))} -> ${escapeHtml(nodeName(target))}</strong>
+        <label>Type <select id="edgeInspectorType">
+          ${EDGE_TYPES.map((type) => `<option value="${escapeHtml(type.id)}" ${type.id === edge.type ? 'selected' : ''}>${escapeHtml(type.label)}</option>`).join('')}
+        </select></label>
+        <label class="toggle"><input id="edgeInspectorBlocking" type="checkbox" ${edge.blocking ? 'checked' : ''}> Blocking gate</label>
+        <label>Payload <textarea id="edgeInspectorPayload" rows="3">${escapeHtml(edge.payload || '')}</textarea></label>
+      </div>
+    `
+    qs('edgeInspectorType').addEventListener('change', (event) => {
+      edge.type = event.target.value
+      topologyChanged()
+    })
+    qs('edgeInspectorBlocking').addEventListener('change', (event) => {
+      edge.blocking = event.target.checked
+      topologyChanged()
+    })
+    qs('edgeInspectorPayload').addEventListener('change', (event) => {
+      edge.payload = event.target.value
+      topologyChanged()
+    })
+    return
+  }
+  if (node) {
+    const incoming = activeEdges().filter((item) => item.target === node.id).length
+    const outgoing = activeEdges().filter((item) => item.source === node.id).length
+    inspector.innerHTML = `
+      <div class="selection-card">
+        <strong>${escapeHtml(nodeName(node))}</strong>
+        <p>${escapeHtml(typeLabel(node.type))} node</p>
+        <p>${incoming} incoming / ${outgoing} outgoing edges</p>
+        <p>${escapeHtml(short(nodeRole(node), 150))}</p>
+      </div>
+    `
+    return
+  }
+  inspector.innerHTML = '<p class="muted">Select a node or edge to inspect it.</p>'
+}
+
+function renderValidation() {
+  const warnings = validateTopology()
+  qs('validationList').innerHTML = warnings.length
+    ? warnings.map((warning) => `<div class="validation-item">${escapeHtml(warning)}</div>`).join('')
+    : '<div class="validation-ok">Graph has the basic generalist cluster structure.</div>'
+}
+
+function validateTopology() {
+  const warnings = []
+  const nodes = activeNodes()
+  const edges = activeEdges()
+  const nodeIds = new Set(nodes.map((node) => node.id))
+  const roleNode = (term) => nodes.find((node) => {
+    const hat = hatForNode(node)
+    return node.type === 'hat' && `${node.id} ${node.name || ''} ${node.role || ''} ${hat?.id || ''} ${hat?.name || ''}`.toLowerCase().includes(term)
+  })
+  const executive = roleNode('executive')
+  const worker = roleNode('worker')
+  const critic = roleNode('critic')
+  const verifier = roleNode('verifier')
+  const memory = roleNode('memory')
+  const finalOutput = nodes.find((node) => node.type === 'output')
+
+  if (!executive) warnings.push('No Executive hat node controls routing and final approval.')
+  if (!worker) warnings.push('No Worker hat node can execute task packets.')
+  if (!critic) warnings.push('No Critic hat node challenges the work.')
+  if (!verifier) warnings.push('No Verifier hat node checks evidence.')
+  if (!finalOutput) warnings.push('No Final Output node exists.')
+  for (const edge of edges) {
+    if (!nodeIds.has(edge.source) || !nodeIds.has(edge.target)) warnings.push(`Edge ${edge.id} points to a missing node.`)
+    if (!EDGE_TYPES.some((type) => type.id === edge.type)) warnings.push(`Edge ${edge.id} has an unknown type.`)
+  }
+  if (worker && critic && !edgePathExists(worker.id, critic.id, new Set(['review']))) {
+    warnings.push('Worker output does not pass through a Critic review path.')
+  }
+  if (worker && verifier && !edgePathExists(worker.id, verifier.id, new Set(['review']))) {
+    warnings.push('Worker output does not pass through a Verifier review path.')
+  }
+  if (verifier && executive && !edgePathExists(verifier.id, executive.id, new Set(['approval']))) {
+    warnings.push('Verifier has no approval path back to Executive.')
+  }
+  if (executive && finalOutput && !activeEdges().some((edge) => edge.source === executive.id && edge.target === finalOutput.id && edge.type === 'approval')) {
+    warnings.push('Final Output has no approval edge from Executive.')
+  }
+  const memoryStore = nodes.find((node) => node.type === 'store' && String(node.id).toLowerCase().includes('memory'))
+  if (memoryStore) {
+    for (const edge of edges.filter((item) => item.target === memoryStore.id && item.type === 'state')) {
+      if (edge.source !== memory?.id) warnings.push('Memory Store receives state writes from a non-curator node.')
+    }
+  }
+  return [...new Set(warnings)]
+}
+
+function edgePathExists(sourceId, targetId, types) {
+  const queue = [{ id: sourceId, depth: 0 }]
+  const seen = new Set([sourceId])
+  while (queue.length) {
+    const current = queue.shift()
+    if (current.depth > 6) continue
+    for (const edge of activeEdges().filter((item) => item.source === current.id && types.has(item.type))) {
+      if (edge.target === targetId) return true
+      if (!seen.has(edge.target)) {
+        seen.add(edge.target)
+        queue.push({ id: edge.target, depth: current.depth + 1 })
+      }
+    }
+  }
+  return false
 }
 
 function topologyChanged() {
@@ -222,12 +593,11 @@ function topologyChanged() {
 }
 
 function newTopology() {
-  state.activeTopology = {
-    id: null,
-    name: 'New Cognitive Cluster',
-    nodes: [],
-    edges: [],
-  }
+  const template = state.topologies.find((topology) => topology.id === 'general_super_agent_cluster') || state.activeTopology || blankTopology()
+  state.activeTopology = JSON.parse(JSON.stringify(template))
+  state.activeTopology.id = null
+  state.activeTopology.name = 'New General Super Agent Cluster'
+  state.activeTopology.schema_version = 2
   state.selectedNodeId = null
   state.selectedEdgeId = null
   state.dirtyTopology = true
@@ -237,6 +607,7 @@ function newTopology() {
 async function saveTopology() {
   const topology = state.activeTopology
   if (!topology) return
+  topology.schema_version = 2
   topology.name = qs('topologyName').value.trim() || 'Untitled topology'
   const saved = topology.id
     ? await api(`/api/topologies/${encodeURIComponent(topology.id)}`, { method: 'PUT', body: JSON.stringify(topology) })
@@ -244,7 +615,7 @@ async function saveTopology() {
   const idx = state.topologies.findIndex((top) => top.id === saved.id)
   if (idx >= 0) state.topologies[idx] = saved
   else state.topologies.unshift(saved)
-  state.activeTopology = saved
+  state.activeTopology = JSON.parse(JSON.stringify(saved))
   state.dirtyTopology = false
   renderAll()
 }
@@ -267,21 +638,88 @@ function svgPointFromClient(clientX, clientY) {
   return point.matrixTransform(svg.getScreenCTM().inverse())
 }
 
-function addNodeAt(hatId, x, y) {
-  if (!hatId || !state.activeTopology) return
-  if (activeNodes().some((node) => node.hat_id === hatId)) return
-  state.activeTopology.nodes.push({
-    hat_id: hatId,
-    x: Math.max(20, Math.min(760, x - 78)),
-    y: Math.max(20, Math.min(580, y - 33)),
-  })
-  selectNode(hatId)
+function addNodeAt(payload, x, y) {
+  if (!payload || !state.activeTopology) return
+  const node = nodeFromPayload(payload)
+  if (!node || paletteItemPlaced({ ...payload, kind: payload.kind, template_id: payload.template_id })) return
+  node.x = Math.max(20, Math.min(GRAPH_MAX_X, x - NODE_WIDTH / 2))
+  node.y = Math.max(20, Math.min(GRAPH_MAX_Y, y - NODE_HEIGHT / 2))
+  state.activeTopology.nodes.push(node)
+  selectNode(node.id)
   topologyChanged()
+}
+
+function nodeFromPayload(payload) {
+  if (payload.kind === 'hat') {
+    const hat = hatById(payload.hat_id)
+    if (!hat) return null
+    return {
+      id: uniqueNodeId(hat.id),
+      type: 'hat',
+      hat_id: hat.id,
+      name: hat.name,
+      role: hat.role || '',
+      color: hat.color || '#42c6ff',
+      authority: authorityForHat(hat),
+      visibility: 'full_blackboard',
+      output_contract: contractForHat(hat),
+      tools: hat.tools || [],
+    }
+  }
+  const template = STRUCTURAL_GROUPS.flatMap((group) => group.items).find((item) => item.template_id === payload.template_id)
+  if (!template) return null
+  return {
+    id: uniqueNodeId(template.template_id),
+    template_id: template.template_id,
+    type: template.type,
+    name: template.name,
+    role: template.role || '',
+    color: template.color || '#42c6ff',
+    authority: template.authority || [],
+    visibility: template.visibility || 'full_blackboard',
+    output_contract: template.output_contract || '',
+    tools: template.tools || [],
+    store_key: template.store_key || '',
+  }
+}
+
+function uniqueNodeId(base) {
+  const clean = String(base || 'node').replace(/[^a-zA-Z0-9_]+/g, '_').toLowerCase()
+  let candidate = clean
+  let index = 2
+  const ids = new Set(activeNodes().map((node) => node.id))
+  while (ids.has(candidate)) {
+    candidate = `${clean}_${index}`
+    index += 1
+  }
+  return candidate
+}
+
+function authorityForHat(hat) {
+  const text = `${hat.id} ${hat.name}`.toLowerCase()
+  if (text.includes('executive')) return ['route', 'revise_plan', 'final_approval']
+  if (text.includes('planner')) return ['delegate', 'write_state']
+  if (text.includes('worker')) return ['execute', 'write_state']
+  if (text.includes('critic')) return ['interrupt', 'request_revision']
+  if (text.includes('verifier')) return ['verify', 'request_evidence']
+  if (text.includes('memory')) return ['write_memory']
+  return hat.can_write_blackboard ? ['write_state'] : []
+}
+
+function contractForHat(hat) {
+  const text = `${hat.id} ${hat.name}`.toLowerCase()
+  if (text.includes('executive')) return 'Decision, routing choice, or approved final answer.'
+  if (text.includes('planner')) return 'Task packet, dependencies, and acceptance checks.'
+  if (text.includes('worker')) return 'Direct answer or artifact with supporting evidence.'
+  if (text.includes('critic')) return 'Specific defects and required revisions.'
+  if (text.includes('verifier')) return 'Verification verdict with evidence and gaps.'
+  if (text.includes('memory')) return 'Durable memory candidates with provenance.'
+  return 'Structured contribution to the cluster blackboard.'
 }
 
 function removeNode() {
   if (!state.selectedNodeId || !state.activeTopology) return
-  state.activeTopology.nodes = activeNodes().filter((node) => node.hat_id !== state.selectedNodeId)
+  state.activeTopology.nodes = activeNodes().filter((node) => node.id !== state.selectedNodeId)
   state.activeTopology.edges = activeEdges().filter((edge) => edge.source !== state.selectedNodeId && edge.target !== state.selectedNodeId)
   state.selectedNodeId = null
   state.selectedEdgeId = null
@@ -290,16 +728,40 @@ function removeNode() {
 
 function createEdge(source, target) {
   if (!source || !target || source === target || !state.activeTopology) return
-  const exists = activeEdges().some((edge) => edge.source === source && edge.target === target)
+  const exists = activeEdges().some((edge) => edge.source === source && edge.target === target && edge.type === state.newEdgeType)
   if (exists) return
   state.activeTopology.edges.push({
-    id: `e_${Date.now().toString(36)}`,
+    id: uniqueEdgeId(),
     source,
     target,
+    type: state.newEdgeType,
+    blocking: ['delegation', 'review', 'escalation', 'approval'].includes(state.newEdgeType),
+    payload: defaultPayloadForEdge(state.newEdgeType),
   })
   state.selectedNodeId = null
   state.selectedEdgeId = state.activeTopology.edges[state.activeTopology.edges.length - 1].id
   topologyChanged()
+}
+
+function uniqueEdgeId() {
+  let candidate = `e_${Date.now().toString(36)}`
+  let index = 2
+  const ids = new Set(activeEdges().map((edge) => edge.id))
+  while (ids.has(candidate)) {
+    candidate = `e_${Date.now().toString(36)}_${index}`
+    index += 1
+  }
+  return candidate
+}
+
+function defaultPayloadForEdge(type) {
+  if (type === 'context') return 'Context available to target node.'
+  if (type === 'delegation') return 'Task packet or instruction for execution.'
+  if (type === 'review') return 'Work product must be reviewed before proceeding.'
+  if (type === 'state') return 'Structured state written or read.'
+  if (type === 'escalation') return 'Revision, objection, interrupt, or escalation.'
+  if (type === 'approval') return 'Approval decision or final verdict.'
+  return ''
 }
 
 function removeEdge(edgeId) {
@@ -318,26 +780,25 @@ function removeSelected() {
   removeNode()
 }
 
-function selectNode(hatId) {
-  state.selectedNodeId = hatId
-  state.selectedHatId = hatId
+function selectNode(nodeId) {
+  const node = nodeById(nodeId)
+  state.selectedNodeId = nodeId
+  state.selectedHatId = node?.hat_id || state.selectedHatId
   state.selectedEdgeId = null
   document.querySelectorAll('.graph-node').forEach((item) => {
-    item.classList.toggle('selected', item.dataset.hatId === hatId)
+    item.classList.toggle('selected', item.dataset.nodeId === nodeId)
   })
   document.querySelectorAll('.graph-edge').forEach((item) => {
     item.classList.remove('selected')
   })
-  const label = hatId ? (hatById(hatId)?.name || hatId) : 'No node selected'
-  qs('selectedNodeLabel').textContent = label
-  qs('openNodeDetailBtn').disabled = !hatId
+  updateSelectionLabel()
+  renderSelectionInspector()
 }
 
 function selectEdge(edgeId) {
-  const edge = activeEdges().find((item) => item.id === edgeId)
+  const edge = edgeById(edgeId)
   if (!edge) return
   state.selectedNodeId = null
-  state.selectedHatId = null
   state.selectedEdgeId = edgeId
   document.querySelectorAll('.graph-node').forEach((item) => {
     item.classList.remove('selected')
@@ -345,52 +806,53 @@ function selectEdge(edgeId) {
   document.querySelectorAll('.graph-edge').forEach((item) => {
     item.classList.toggle('selected', item.dataset.edgeId === edgeId)
   })
-  const source = hatById(edge.source)?.name || edge.source
-  const target = hatById(edge.target)?.name || edge.target
-  qs('selectedNodeLabel').textContent = `${source} -> ${target}`
-  qs('openNodeDetailBtn').disabled = true
+  updateSelectionLabel()
+  renderSelectionInspector()
 }
 
 function updateSelectionLabel() {
-  if (state.selectedEdgeId) {
-    const edge = activeEdges().find((item) => item.id === state.selectedEdgeId)
-    if (edge) {
-      const source = hatById(edge.source)?.name || edge.source
-      const target = hatById(edge.target)?.name || edge.target
-      qs('selectedNodeLabel').textContent = `${source} -> ${target}`
-      qs('openNodeDetailBtn').disabled = true
-      return
-    }
+  const edge = edgeById(state.selectedEdgeId)
+  if (edge) {
+    qs('selectedNodeLabel').textContent = `${nodeName(nodeById(edge.source))} -> ${nodeName(nodeById(edge.target))}`
+    qs('openNodeDetailBtn').disabled = true
+    return
   }
-  const label = state.selectedNodeId ? (hatById(state.selectedNodeId)?.name || state.selectedNodeId) : 'No node selected'
-  qs('selectedNodeLabel').textContent = label
-  qs('openNodeDetailBtn').disabled = !state.selectedNodeId
+  const node = nodeById(state.selectedNodeId)
+  qs('selectedNodeLabel').textContent = node ? nodeName(node) : 'No node selected'
+  qs('openNodeDetailBtn').disabled = !node
 }
 
-function nodeByHatId(hatId) {
-  return activeNodes().find((node) => node.hat_id === hatId)
-}
+function openNodeDetail(nodeId) {
+  const node = nodeById(nodeId)
+  if (!node) return
+  const hat = hatForNode(node)
+  selectNode(nodeId)
+  state.editingNodeId = nodeId
 
-function openNodeDetail(hatId) {
-  const node = nodeByHatId(hatId)
-  const hat = hatById(hatId)
-  if (!node || !hat) return
-  selectNode(hatId)
-  state.editingNodeId = hatId
-
-  qs('nodeDetailTitle').textContent = hat.name || hat.id
-  qs('nodeDetailMeta').textContent = `Node ${hat.id}`
-  qs('nodeDetailHatId').value = hat.id
-  qs('nodeDetailName').value = hat.name || ''
-  qs('nodeDetailColor').value = hat.color || '#42c6ff'
+  qs('nodeDetailTitle').textContent = nodeName(node)
+  qs('nodeDetailMeta').textContent = `${typeLabel(node.type)} node ${node.id}`
+  qs('nodeDetailNodeId').value = node.id
+  qs('nodeDetailHatId').value = node.hat_id || ''
+  qs('nodeDetailName').value = nodeName(node)
+  qs('nodeDetailType').innerHTML = NODE_TYPES.map((type) => (
+    `<option value="${escapeHtml(type.id)}" ${type.id === node.type ? 'selected' : ''}>${escapeHtml(type.label)}</option>`
+  )).join('')
+  qs('nodeDetailColor').value = nodeColor(node)
   qs('nodeDetailX').value = Math.round(Number(node.x) || 20)
   qs('nodeDetailY').value = Math.round(Number(node.y) || 20)
-  qs('nodeDetailRole').value = hat.role || ''
-  qs('nodeDetailSystem').value = hat.system_prompt || ''
-  qs('nodeDetailCanWrite').checked = Boolean(hat.can_write_blackboard)
-  qs('nodeDetailCanPrompt').checked = Boolean(hat.can_prompt_hats)
+  qs('nodeDetailRole').value = nodeRole(node)
+  qs('nodeDetailSystem').value = node.system_prompt || hat?.system_prompt || ''
+  qs('nodeDetailOutputContract').value = node.output_contract || ''
+  qs('nodeDetailVisibility').innerHTML = VISIBILITY_IDS.map((visibility) => (
+    `<option value="${escapeHtml(visibility)}" ${visibility === (node.visibility || 'full_blackboard') ? 'selected' : ''}>${escapeHtml(visibility)}</option>`
+  )).join('')
+  qs('nodeDetailStoreKey').value = node.store_key || ''
+  qs('nodeDetailAuthority').innerHTML = AUTHORITY_IDS.map((authority) => `
+    <label><input type="checkbox" value="${authority}" ${(node.authority || []).includes(authority) ? 'checked' : ''}> ${authority}</label>
+  `).join('')
+  const tools = node.tools || hat?.tools || []
   qs('nodeDetailTools').innerHTML = TOOL_IDS.map((tool) => `
-    <label><input type="checkbox" value="${tool}" ${hat.tools?.includes(tool) ? 'checked' : ''}> ${tool}</label>
+    <label><input type="checkbox" value="${tool}" ${tools.includes(tool) ? 'checked' : ''}> ${tool}</label>
   `).join('')
 
   const dialog = qs('nodeDetailDialog')
@@ -404,33 +866,24 @@ function closeNodeDetail() {
   if (dialog.open) dialog.close()
 }
 
-async function saveNodeDetail(event) {
+function saveNodeDetail(event) {
   event.preventDefault()
-  const id = qs('nodeDetailHatId').value.trim()
-  const node = nodeByHatId(id)
+  const id = qs('nodeDetailNodeId').value.trim()
+  const node = nodeById(id)
   if (!id || !node) return
-  const tools = [...qs('nodeDetailTools').querySelectorAll('input:checked')].map((input) => input.value)
-  const body = {
-    id,
-    name: qs('nodeDetailName').value.trim(),
-    role: qs('nodeDetailRole').value.trim(),
-    system_prompt: qs('nodeDetailSystem').value.trim(),
-    model: 'auto',
-    temperature: 0.2,
-    tools,
-    color: qs('nodeDetailColor').value,
-    icon: 'spark',
-    can_write_blackboard: qs('nodeDetailCanWrite').checked,
-    can_prompt_hats: qs('nodeDetailCanPrompt').checked,
-  }
-  node.x = Math.max(20, Math.min(760, Number(qs('nodeDetailX').value || node.x)))
-  node.y = Math.max(20, Math.min(580, Number(qs('nodeDetailY').value || node.y)))
-
-  const saved = await api(`/api/hats/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(body) })
-  const idx = state.hats.findIndex((item) => item.id === saved.id)
-  if (idx >= 0) state.hats[idx] = saved
-  state.selectedHatId = saved.id
-  state.selectedNodeId = saved.id
+  node.type = qs('nodeDetailType').value
+  node.name = qs('nodeDetailName').value.trim()
+  node.color = qs('nodeDetailColor').value
+  node.x = Math.max(20, Math.min(GRAPH_MAX_X, Number(qs('nodeDetailX').value || node.x)))
+  node.y = Math.max(20, Math.min(GRAPH_MAX_Y, Number(qs('nodeDetailY').value || node.y)))
+  node.role = qs('nodeDetailRole').value.trim()
+  node.system_prompt = qs('nodeDetailSystem').value.trim()
+  node.output_contract = qs('nodeDetailOutputContract').value.trim()
+  node.visibility = qs('nodeDetailVisibility').value
+  node.store_key = qs('nodeDetailStoreKey').value.trim()
+  node.authority = [...qs('nodeDetailAuthority').querySelectorAll('input:checked')].map((input) => input.value)
+  node.tools = [...qs('nodeDetailTools').querySelectorAll('input:checked')].map((input) => input.value)
+  state.selectedNodeId = node.id
   state.dirtyTopology = true
   closeNodeDetail()
   renderAll()
@@ -441,62 +894,80 @@ function renderGraph() {
   const marker = svg.querySelector('defs')?.outerHTML || ''
   svg.innerHTML = marker
   const nodes = activeNodes()
-  const nodeById = Object.fromEntries(nodes.map((node) => [node.hat_id, node]))
+  const nodeMap = Object.fromEntries(nodes.map((node) => [node.id, node]))
   for (const edge of activeEdges()) {
-    const source = nodeById[edge.source]
-    const target = nodeById[edge.target]
+    const source = nodeMap[edge.source]
+    const target = nodeMap[edge.target]
     if (!source || !target) continue
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-    const x1 = Number(source.x) + 78
-    const y1 = Number(source.y) + 32
-    const x2 = Number(target.x) + 78
-    const y2 = Number(target.y) + 32
+    const x1 = Number(source.x) + NODE_WIDTH / 2
+    const y1 = Number(source.y) + NODE_HEIGHT / 2
+    const x2 = Number(target.x) + NODE_WIDTH / 2
+    const y2 = Number(target.y) + NODE_HEIGHT / 2
     const mid = (y1 + y2) / 2
     path.setAttribute('d', `M ${x1} ${y1} C ${x1} ${mid}, ${x2} ${mid}, ${x2} ${y2}`)
-    path.setAttribute('class', `graph-edge ${state.selectedEdgeId === edge.id ? 'selected' : ''}`)
+    path.setAttribute('class', `graph-edge edge-${edge.type || 'context'} ${edge.blocking ? 'blocking' : ''} ${state.selectedEdgeId === edge.id ? 'selected' : ''}`)
     path.dataset.edgeId = edge.id
     path.addEventListener('click', (event) => {
       event.stopPropagation()
       selectEdge(edge.id)
     })
     svg.appendChild(path)
+
+    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text')
+    label.setAttribute('x', String((x1 + x2) / 2))
+    label.setAttribute('y', String((y1 + y2) / 2 - 5))
+    label.setAttribute('class', 'edge-label')
+    label.dataset.edgeId = edge.id
+    label.textContent = edgeTypeLabel(edge.type)
+    label.addEventListener('click', (event) => {
+      event.stopPropagation()
+      selectEdge(edge.id)
+    })
+    svg.appendChild(label)
   }
   for (const node of nodes) {
-    const hat = hatById(node.hat_id)
-    if (!hat) continue
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g')
-    g.setAttribute('class', `graph-node ${state.selectedNodeId === node.hat_id ? 'selected' : ''}`)
+    g.setAttribute('class', `graph-node node-${node.type || 'hat'} ${state.selectedNodeId === node.id ? 'selected' : ''}`)
     g.setAttribute('transform', `translate(${node.x}, ${node.y})`)
-    g.dataset.hatId = node.hat_id
-    g.innerHTML = `
-      <rect width="156" height="66"></rect>
-      <circle cx="18" cy="22" r="8" fill="${escapeHtml(hat.color || '#42c6ff')}"></circle>
-      <text x="33" y="25">${escapeHtml(hat.name)}</text>
-      <text class="role" x="14" y="48">${escapeHtml(short(hat.role || hat.id, 24))}</text>
-      <circle class="edge-handle" cx="150" cy="33" r="7"></circle>
-    `
+    g.dataset.nodeId = node.id
+    g.innerHTML = nodeMarkup(node)
     g.addEventListener('pointerdown', startDrag)
     g.addEventListener('click', (event) => {
       if (event.detail >= 2) {
         event.preventDefault()
-        openNodeDetail(node.hat_id)
+        openNodeDetail(node.id)
         return
       }
-      selectNode(node.hat_id)
+      selectNode(node.id)
     })
     g.addEventListener('dblclick', (event) => {
       event.preventDefault()
       event.stopPropagation()
-      openNodeDetail(node.hat_id)
+      openNodeDetail(node.id)
     })
     g.querySelector('.edge-handle').addEventListener('pointerdown', (event) => {
       event.preventDefault()
       event.stopPropagation()
-      startConnection(event, node.hat_id)
+      startConnection(event, node.id)
     })
     svg.appendChild(g)
   }
   updateSelectionLabel()
+}
+
+function nodeMarkup(node) {
+  const shape = node.type === 'gate'
+    ? `<path class="node-shape" d="M 78 2 L 154 33 L 78 64 L 2 33 Z"></path>`
+    : `<rect class="node-shape" width="${NODE_WIDTH}" height="${NODE_HEIGHT}"></rect>`
+  return `
+    ${shape}
+    <circle cx="18" cy="22" r="8" fill="${escapeHtml(nodeColor(node))}"></circle>
+    <text x="33" y="25">${escapeHtml(short(nodeName(node), 20))}</text>
+    <text class="role" x="14" y="48">${escapeHtml(short(nodeRole(node), 24))}</text>
+    <text class="node-kind" x="116" y="14">${escapeHtml(typeLabel(node.type))}</text>
+    <circle class="edge-handle" cx="150" cy="33" r="7"></circle>
+  `
 }
 
 let drag = null
@@ -505,12 +976,12 @@ let connectionDrag = null
 function startDrag(event) {
   if (event.target.classList?.contains('edge-handle')) return
   event.preventDefault()
-  const hatId = event.currentTarget.dataset.hatId
-  const node = activeNodes().find((item) => item.hat_id === hatId)
+  const nodeId = event.currentTarget.dataset.nodeId
+  const node = nodeById(nodeId)
   if (!node) return
-  selectNode(hatId)
+  selectNode(nodeId)
   drag = {
-    hatId,
+    nodeId,
     startClientX: event.clientX,
     startClientY: event.clientY,
     startX: Number(node.x),
@@ -522,10 +993,10 @@ function startDrag(event) {
 
 function onDrag(event) {
   if (!drag) return
-  const node = activeNodes().find((item) => item.hat_id === drag.hatId)
+  const node = nodeById(drag.nodeId)
   if (!node) return
-  node.x = Math.max(20, Math.min(760, drag.startX + (event.clientX - drag.startClientX)))
-  node.y = Math.max(20, Math.min(580, drag.startY + (event.clientY - drag.startClientY)))
+  node.x = Math.max(20, Math.min(GRAPH_MAX_X, drag.startX + (event.clientX - drag.startClientX)))
+  node.y = Math.max(20, Math.min(GRAPH_MAX_Y, drag.startY + (event.clientY - drag.startClientY)))
   state.dirtyTopology = true
   renderGraph()
 }
@@ -536,19 +1007,19 @@ function endDrag() {
   renderTopologyControls()
 }
 
-function startConnection(event, sourceHatId) {
-  const sourceNode = nodeByHatId(sourceHatId)
+function startConnection(event, sourceNodeId) {
+  const sourceNode = nodeById(sourceNodeId)
   if (!sourceNode) return
   const svg = qs('graphSvg')
   const start = {
-    x: Number(sourceNode.x) + 150,
-    y: Number(sourceNode.y) + 33,
+    x: Number(sourceNode.x) + NODE_WIDTH - 6,
+    y: Number(sourceNode.y) + NODE_HEIGHT / 2,
   }
   const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-  path.setAttribute('class', 'graph-edge preview')
+  path.setAttribute('class', `graph-edge preview edge-${state.newEdgeType}`)
   path.setAttribute('d', `M ${start.x} ${start.y} L ${start.x} ${start.y}`)
   svg.appendChild(path)
-  connectionDrag = { sourceHatId, start, path }
+  connectionDrag = { sourceNodeId, start, path }
   document.addEventListener('pointermove', onConnectionMove)
   document.addEventListener('pointerup', endConnection, { once: true })
 }
@@ -567,11 +1038,11 @@ function endConnection(event) {
   document.removeEventListener('pointermove', onConnectionMove)
   if (!connectionDrag) return
   const targetNode = event.target.closest?.('.graph-node')
-  const targetHatId = targetNode?.dataset?.hatId
+  const targetNodeId = targetNode?.dataset?.nodeId
   connectionDrag.path.remove()
-  const sourceHatId = connectionDrag.sourceHatId
+  const sourceNodeId = connectionDrag.sourceNodeId
   connectionDrag = null
-  if (targetHatId) createEdge(sourceHatId, targetHatId)
+  if (targetNodeId) createEdge(sourceNodeId, targetNodeId)
 }
 
 async function runCluster() {
@@ -661,6 +1132,8 @@ function eventDetailText(event) {
   return [
     `Event: ${event.seq} / ${event.event_type}`,
     `Hat: ${event.hat_name || event.hat_id || 'system'}`,
+    `Stage: ${event.metadata?.stage || 'n/a'}`,
+    `Node: ${event.metadata?.node_id || 'n/a'} (${event.metadata?.node_type || 'n/a'})`,
     '',
     'Prompt / input:',
     event.prompt || '(none)',
@@ -671,7 +1144,10 @@ function eventDetailText(event) {
     'Blackboard changes:',
     pretty(delta),
     '',
-    'Usage / cost placeholder:',
+    'Edge context:',
+    pretty(event.metadata?.edge_context || {}),
+    '',
+    'Usage / cost:',
     pretty({
       usage: event.metadata?.usage || {},
       estimated_cost_usd: event.metadata?.estimated_cost_usd || 0,
@@ -697,6 +1173,9 @@ function bindControls() {
     state.dirtyTopology = true
     renderTopologyControls()
   })
+  qs('newEdgeType').addEventListener('change', (event) => {
+    state.newEdgeType = event.target.value
+  })
   qs('saveTopologyBtn').addEventListener('click', saveTopology)
   qs('newTopologyBtn').addEventListener('click', newTopology)
   qs('removeNodeBtn').addEventListener('click', removeSelected)
@@ -706,9 +1185,11 @@ function bindControls() {
   })
   qs('graphSvg').addEventListener('drop', (event) => {
     event.preventDefault()
-    const hatId = event.dataTransfer.getData('text/plain')
+    const raw = event.dataTransfer.getData('application/json') || event.dataTransfer.getData('text/plain')
+    if (!raw) return
+    const payload = JSON.parse(raw)
     const point = svgPointFromClient(event.clientX, event.clientY)
-    addNodeAt(hatId, point.x, point.y)
+    addNodeAt(payload, point.x, point.y)
   })
   qs('openNodeDetailBtn').addEventListener('click', () => {
     if (state.selectedNodeId) openNodeDetail(state.selectedNodeId)

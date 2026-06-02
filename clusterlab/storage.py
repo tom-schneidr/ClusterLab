@@ -65,10 +65,13 @@ class ClusterStore:
                 );
                 """
             )
-            if not conn.execute("select 1 from hats limit 1").fetchone():
-                for hat in DEFAULT_HATS:
-                    self._save_hat_conn(conn, hat)
-            if not conn.execute("select 1 from topologies limit 1").fetchone():
+            for hat in DEFAULT_HATS:
+                self._save_hat_conn(conn, hat)
+            default_row = conn.execute(
+                "select data_json from topologies where id = ?", (DEFAULT_TOPOLOGY["id"],)
+            ).fetchone()
+            default_data = json.loads(default_row["data_json"]) if default_row else {}
+            if default_data.get("schema_version") != DEFAULT_TOPOLOGY["schema_version"]:
                 self._save_topology_conn(conn, DEFAULT_TOPOLOGY)
 
     def list_hats(self) -> list[dict[str, Any]]:

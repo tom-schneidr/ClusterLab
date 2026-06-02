@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ClusterLab</title>
-  <link rel="stylesheet" href="/static/styles.css?v=20260602-topology-dnd">
+  <link rel="stylesheet" href="/static/styles.css?v=20260602-typed-graph">
 </head>
 <body>
   <div class="shell">
@@ -48,7 +48,7 @@
         <div class="view-head">
           <div>
             <h2>Hats</h2>
-            <p>Define the mental functions that can participate in a single role cluster.</p>
+            <p>Define reusable mental functions that can be placed into cluster graphs.</p>
           </div>
           <button id="newHatBtn">New Hat</button>
         </div>
@@ -100,18 +100,30 @@
               <button id="newTopologyBtn">New Preset</button>
             </div>
             <div class="divider"></div>
+            <label>New edge type <select id="newEdgeType"></select></label>
+            <div class="divider"></div>
             <div class="palette-section">
-              <h4>Hat Palette</h4>
-              <div id="hatPalette" class="hat-palette"></div>
+              <h4>Node Palette</h4>
+              <div id="nodePalette" class="node-palette"></div>
             </div>
             <button id="removeNodeBtn" class="danger">Remove Selected</button>
+            <div class="divider"></div>
+            <div class="selection-section">
+              <h4>Selection</h4>
+              <div id="selectionInspector" class="selection-inspector"></div>
+            </div>
+            <div class="divider"></div>
+            <div class="validation-section">
+              <h4>Validation</h4>
+              <div id="validationList" class="validation-list"></div>
+            </div>
           </section>
 
           <section class="panel canvas-panel">
             <div class="canvas-head">
               <div>
                 <h3>Cluster Canvas</h3>
-                <p>Drag hats to change layout. Directed edges define allowed influence or prompt paths.</p>
+                <p>Drag nodes onto the graph. Typed edges define context, delegation, review, state, escalation, and approval flow.</p>
               </div>
               <div class="selected-node-actions">
                 <span id="selectedNodeLabel">No node selected</span>
@@ -167,12 +179,21 @@
     </div>
     <form id="nodeDetailForm" class="form-grid">
       <input type="hidden" id="nodeDetailHatId">
+      <input type="hidden" id="nodeDetailNodeId">
       <label>Name <input id="nodeDetailName" required></label>
+      <label>Type <select id="nodeDetailType"></select></label>
       <label>Color <input id="nodeDetailColor" type="color"></label>
       <label>X <input id="nodeDetailX" type="number" min="20" max="760" step="1"></label>
       <label>Y <input id="nodeDetailY" type="number" min="20" max="580" step="1"></label>
       <label class="wide">Short role / purpose <textarea id="nodeDetailRole" rows="3"></textarea></label>
-      <label class="wide">System prompt <textarea id="nodeDetailSystem" rows="8"></textarea></label>
+      <label class="wide">System prompt / node instruction <textarea id="nodeDetailSystem" rows="6"></textarea></label>
+      <label class="wide">Output contract <textarea id="nodeDetailOutputContract" rows="3"></textarea></label>
+      <label>Visibility <select id="nodeDetailVisibility"></select></label>
+      <label>Store key <input id="nodeDetailStoreKey"></label>
+      <fieldset class="wide">
+        <legend>Authority</legend>
+        <div id="nodeDetailAuthority" class="checks"></div>
+      </fieldset>
       <fieldset class="wide">
         <legend>Tool permissions</legend>
         <div id="nodeDetailTools" class="checks"></div>
@@ -185,6 +206,6 @@
       </div>
     </form>
   </dialog>
-  <script src="/static/app.js?v=20260602-topology-dnd"></script>
+  <script src="/static/app.js?v=20260602-typed-graph"></script>
 </body>
 </html>

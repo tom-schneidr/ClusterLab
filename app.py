@@ -46,6 +46,7 @@ class HatDefinitionIn(BaseModel):
 
 
 class TopologyIn(BaseModel):
+    schema_version: int = 2
     id: str | None = None
     name: str = Field(min_length=1, max_length=120)
     nodes: list[dict[str, Any]] = Field(default_factory=list)

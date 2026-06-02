@@ -418,14 +418,26 @@ legend {
   text-transform: uppercase;
 }
 
-.hat-palette {
+.node-palette {
   display: grid;
-  gap: 8px;
+  gap: 12px;
   max-height: 360px;
   overflow: auto;
 }
 
-.palette-hat {
+.palette-group {
+  display: grid;
+  gap: 7px;
+}
+
+.palette-group h5 {
+  margin: 0;
+  color: var(--faint);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.palette-node {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 10px;
@@ -437,17 +449,17 @@ legend {
   cursor: grab;
 }
 
-.palette-hat.disabled {
+.palette-node.disabled {
   cursor: not-allowed;
   opacity: 0.42;
 }
 
-.palette-hat strong {
+.palette-node strong {
   display: block;
   font-size: 13px;
 }
 
-.palette-hat p {
+.palette-node p {
   margin: 4px 0 0;
   color: var(--muted);
   font-size: 11px;
@@ -458,6 +470,67 @@ legend {
   width: 10px;
   height: 10px;
   border-radius: 999px;
+}
+
+.selection-section,
+.validation-section {
+  display: grid;
+  gap: 8px;
+}
+
+.selection-section h4,
+.validation-section h4 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.selection-inspector,
+.validation-list {
+  display: grid;
+  gap: 8px;
+}
+
+.selection-card {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+  background: var(--panel-2);
+}
+
+.selection-card strong {
+  font-size: 13px;
+}
+
+.selection-card p,
+.muted {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.validation-item {
+  border: 1px solid rgba(255, 209, 102, 0.35);
+  border-radius: 6px;
+  padding: 8px;
+  color: #ffe6a6;
+  background: rgba(255, 209, 102, 0.08);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.validation-ok {
+  border: 1px solid rgba(43, 217, 163, 0.35);
+  border-radius: 6px;
+  padding: 8px;
+  color: #c6ffe9;
+  background: rgba(43, 217, 163, 0.08);
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .canvas-panel {
@@ -509,9 +582,39 @@ button:disabled {
   fill: none;
 }
 
+.edge-context {
+  stroke: #8fb7ff;
+}
+
+.edge-delegation {
+  stroke: #ffd166;
+}
+
+.edge-review {
+  stroke: #ff6b6b;
+}
+
+.edge-state {
+  stroke: #2bd9a3;
+  stroke-dasharray: 5 4;
+}
+
+.edge-escalation {
+  stroke: #f78c6b;
+  stroke-dasharray: 8 4;
+}
+
+.edge-approval {
+  stroke: #42c6ff;
+}
+
+.graph-edge.blocking {
+  stroke-width: 2.1;
+}
+
 .graph-edge.selected {
   stroke: var(--accent);
-  stroke-width: 2.5;
+  stroke-width: 3;
 }
 
 .graph-edge.preview {
@@ -521,19 +624,50 @@ button:disabled {
   pointer-events: none;
 }
 
+.edge-label {
+  fill: #d9e7ef;
+  paint-order: stroke;
+  stroke: #0f151e;
+  stroke-width: 4px;
+  font-size: 10px;
+  font-weight: 750;
+  text-anchor: middle;
+  cursor: pointer;
+}
+
 .graph-node {
   cursor: grab;
 }
 
-.graph-node.selected rect {
+.graph-node.selected .node-shape {
   stroke: var(--accent);
   stroke-width: 2;
 }
 
-.graph-node rect {
+.graph-node .node-shape {
   fill: #161f2c;
   stroke: #314052;
   rx: 7;
+}
+
+.graph-node.node-store .node-shape {
+  fill: #132337;
+  stroke: #466184;
+}
+
+.graph-node.node-gate .node-shape {
+  fill: #2a1720;
+  stroke: #7a4250;
+}
+
+.graph-node.node-tool .node-shape {
+  fill: #2a2515;
+  stroke: #786b38;
+}
+
+.graph-node.node-output .node-shape {
+  fill: #102736;
+  stroke: #3a7890;
 }
 
 .graph-node text {
@@ -547,6 +681,13 @@ button:disabled {
   fill: var(--muted);
   font-size: 10px;
   font-weight: 600;
+}
+
+.graph-node .node-kind {
+  fill: var(--faint);
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
 }
 
 .edge-handle {

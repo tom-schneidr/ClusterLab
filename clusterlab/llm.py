@@ -38,11 +38,13 @@ def call_llm(
     *,
     model: str | None = None,
     temperature: float = 0.2,
+    max_tokens: int = 900,
 ) -> LlmResult:
     payload = {
         "model": model or default_model(),
         "messages": messages,
         "temperature": temperature,
+        "max_tokens": max_tokens,
     }
     body = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
