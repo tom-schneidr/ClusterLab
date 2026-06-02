@@ -406,28 +406,58 @@ legend {
   margin: 4px 0;
 }
 
-.edge-list {
+.palette-section {
   display: grid;
-  gap: 6px;
-  max-height: 170px;
+  gap: 10px;
+}
+
+.palette-section h4 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.hat-palette {
+  display: grid;
+  gap: 8px;
+  max-height: 360px;
   overflow: auto;
 }
 
-.edge-item {
+.palette-hat {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
   align-items: center;
-  gap: 8px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 7px;
-  color: var(--muted);
-  font-size: 12px;
+  padding: 9px;
+  background: var(--panel-2);
+  cursor: grab;
 }
 
-.edge-item button {
-  min-height: 26px;
-  padding: 0 8px;
+.palette-hat.disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.palette-hat strong {
+  display: block;
+  font-size: 13px;
+}
+
+.palette-hat p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.palette-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
 }
 
 .canvas-panel {
@@ -475,6 +505,20 @@ button:disabled {
   stroke: #6f7b88;
   stroke-width: 1.5;
   marker-end: url(#arrow);
+  cursor: pointer;
+  fill: none;
+}
+
+.graph-edge.selected {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+}
+
+.graph-edge.preview {
+  stroke: var(--accent);
+  stroke-dasharray: 5 5;
+  marker-end: none;
+  pointer-events: none;
 }
 
 .graph-node {
@@ -503,6 +547,17 @@ button:disabled {
   fill: var(--muted);
   font-size: 10px;
   font-weight: 600;
+}
+
+.edge-handle {
+  fill: #101722;
+  stroke: var(--accent);
+  stroke-width: 2;
+  cursor: crosshair;
+}
+
+.edge-handle:hover {
+  fill: var(--accent);
 }
 
 .analysis-layout {

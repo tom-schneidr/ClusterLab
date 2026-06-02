@@ -13,6 +13,7 @@ const state = {
   activeTopology: null,
   selectedHatId: null,
   selectedNodeId: null,
+  selectedEdgeId: null,
   currentRun: null,
   selectedEventSeq: null,
   view: 'hats',
@@ -194,29 +195,23 @@ function renderTopologyControls() {
   qs('topologySavedState').textContent = state.dirtyTopology ? 'Unsaved changes' : 'Loaded'
 
   const existing = new Set(activeNodes().map((node) => node.hat_id))
-  qs('addHatSelect').innerHTML = state.hats
-    .filter((hat) => !existing.has(hat.id))
-    .map((hat) => `<option value="${escapeHtml(hat.id)}">${escapeHtml(hat.name)}</option>`)
-    .join('')
-
-  const nodeOptions = activeNodes().map((node) => {
-    const hat = hatById(node.hat_id)
-    return `<option value="${escapeHtml(node.hat_id)}">${escapeHtml(hat?.name || node.hat_id)}</option>`
-  }).join('')
-  qs('edgeSource').innerHTML = nodeOptions
-  qs('edgeTarget').innerHTML = nodeOptions
-  qs('edgeList').innerHTML = activeEdges().map((edge) => {
-    const source = hatById(edge.source)?.name || edge.source
-    const target = hatById(edge.target)?.name || edge.target
+  qs('hatPalette').innerHTML = state.hats.map((hat) => {
+    const placed = existing.has(hat.id)
     return `
-      <div class="edge-item">
-        <span>${escapeHtml(source)} -> ${escapeHtml(target)}</span>
-        <button data-edge-id="${escapeHtml(edge.id)}">Remove</button>
+      <div class="palette-hat ${placed ? 'disabled' : ''}" draggable="${placed ? 'false' : 'true'}" data-hat-id="${escapeHtml(hat.id)}">
+        <span class="palette-dot" style="background:${escapeHtml(hat.color || '#42c6ff')}"></span>
+        <div>
+          <strong>${escapeHtml(hat.name)}</strong>
+          <p>${escapeHtml(short(hat.role || hat.id, 72))}</p>
+        </div>
       </div>
     `
   }).join('')
-  qs('edgeList').querySelectorAll('button').forEach((button) => {
-    button.addEventListener('click', () => removeEdge(button.dataset.edgeId))
+  qs('hatPalette').querySelectorAll('.palette-hat:not(.disabled)').forEach((item) => {
+    item.addEventListener('dragstart', (event) => {
+      event.dataTransfer.setData('text/plain', item.dataset.hatId)
+      event.dataTransfer.effectAllowed = 'copy'
+    })
   })
 }
 
@@ -234,6 +229,7 @@ function newTopology() {
     edges: [],
   }
   state.selectedNodeId = null
+  state.selectedEdgeId = null
   state.dirtyTopology = true
   renderAll()
 }
@@ -258,20 +254,28 @@ function loadTopology(id) {
   if (!topology) return
   state.activeTopology = JSON.parse(JSON.stringify(topology))
   state.selectedNodeId = null
+  state.selectedEdgeId = null
   state.dirtyTopology = false
   renderAll()
 }
 
-function addNode() {
-  const hatId = qs('addHatSelect').value
+function svgPointFromClient(clientX, clientY) {
+  const svg = qs('graphSvg')
+  const point = svg.createSVGPoint()
+  point.x = clientX
+  point.y = clientY
+  return point.matrixTransform(svg.getScreenCTM().inverse())
+}
+
+function addNodeAt(hatId, x, y) {
   if (!hatId || !state.activeTopology) return
-  const count = activeNodes().length
+  if (activeNodes().some((node) => node.hat_id === hatId)) return
   state.activeTopology.nodes.push({
     hat_id: hatId,
-    x: 130 + (count % 3) * 240,
-    y: 130 + Math.floor(count / 3) * 150,
+    x: Math.max(20, Math.min(760, x - 78)),
+    y: Math.max(20, Math.min(580, y - 33)),
   })
-  state.selectedNodeId = hatId
+  selectNode(hatId)
   topologyChanged()
 }
 
@@ -280,12 +284,11 @@ function removeNode() {
   state.activeTopology.nodes = activeNodes().filter((node) => node.hat_id !== state.selectedNodeId)
   state.activeTopology.edges = activeEdges().filter((edge) => edge.source !== state.selectedNodeId && edge.target !== state.selectedNodeId)
   state.selectedNodeId = null
+  state.selectedEdgeId = null
   topologyChanged()
 }
 
-function addEdge() {
-  const source = qs('edgeSource').value
-  const target = qs('edgeTarget').value
+function createEdge(source, target) {
   if (!source || !target || source === target || !state.activeTopology) return
   const exists = activeEdges().some((edge) => edge.source === source && edge.target === target)
   if (exists) return
@@ -294,24 +297,74 @@ function addEdge() {
     source,
     target,
   })
+  state.selectedNodeId = null
+  state.selectedEdgeId = state.activeTopology.edges[state.activeTopology.edges.length - 1].id
   topologyChanged()
 }
 
 function removeEdge(edgeId) {
   if (!state.activeTopology) return
   state.activeTopology.edges = activeEdges().filter((edge) => edge.id !== edgeId)
+  state.selectedEdgeId = null
+  state.selectedNodeId = null
   topologyChanged()
+}
+
+function removeSelected() {
+  if (state.selectedEdgeId) {
+    removeEdge(state.selectedEdgeId)
+    return
+  }
+  removeNode()
 }
 
 function selectNode(hatId) {
   state.selectedNodeId = hatId
   state.selectedHatId = hatId
+  state.selectedEdgeId = null
   document.querySelectorAll('.graph-node').forEach((item) => {
     item.classList.toggle('selected', item.dataset.hatId === hatId)
+  })
+  document.querySelectorAll('.graph-edge').forEach((item) => {
+    item.classList.remove('selected')
   })
   const label = hatId ? (hatById(hatId)?.name || hatId) : 'No node selected'
   qs('selectedNodeLabel').textContent = label
   qs('openNodeDetailBtn').disabled = !hatId
+}
+
+function selectEdge(edgeId) {
+  const edge = activeEdges().find((item) => item.id === edgeId)
+  if (!edge) return
+  state.selectedNodeId = null
+  state.selectedHatId = null
+  state.selectedEdgeId = edgeId
+  document.querySelectorAll('.graph-node').forEach((item) => {
+    item.classList.remove('selected')
+  })
+  document.querySelectorAll('.graph-edge').forEach((item) => {
+    item.classList.toggle('selected', item.dataset.edgeId === edgeId)
+  })
+  const source = hatById(edge.source)?.name || edge.source
+  const target = hatById(edge.target)?.name || edge.target
+  qs('selectedNodeLabel').textContent = `${source} -> ${target}`
+  qs('openNodeDetailBtn').disabled = true
+}
+
+function updateSelectionLabel() {
+  if (state.selectedEdgeId) {
+    const edge = activeEdges().find((item) => item.id === state.selectedEdgeId)
+    if (edge) {
+      const source = hatById(edge.source)?.name || edge.source
+      const target = hatById(edge.target)?.name || edge.target
+      qs('selectedNodeLabel').textContent = `${source} -> ${target}`
+      qs('openNodeDetailBtn').disabled = true
+      return
+    }
+  }
+  const label = state.selectedNodeId ? (hatById(state.selectedNodeId)?.name || state.selectedNodeId) : 'No node selected'
+  qs('selectedNodeLabel').textContent = label
+  qs('openNodeDetailBtn').disabled = !state.selectedNodeId
 }
 
 function nodeByHatId(hatId) {
@@ -400,7 +453,12 @@ function renderGraph() {
     const y2 = Number(target.y) + 32
     const mid = (y1 + y2) / 2
     path.setAttribute('d', `M ${x1} ${y1} C ${x1} ${mid}, ${x2} ${mid}, ${x2} ${y2}`)
-    path.setAttribute('class', 'graph-edge')
+    path.setAttribute('class', `graph-edge ${state.selectedEdgeId === edge.id ? 'selected' : ''}`)
+    path.dataset.edgeId = edge.id
+    path.addEventListener('click', (event) => {
+      event.stopPropagation()
+      selectEdge(edge.id)
+    })
     svg.appendChild(path)
   }
   for (const node of nodes) {
@@ -415,6 +473,7 @@ function renderGraph() {
       <circle cx="18" cy="22" r="8" fill="${escapeHtml(hat.color || '#42c6ff')}"></circle>
       <text x="33" y="25">${escapeHtml(hat.name)}</text>
       <text class="role" x="14" y="48">${escapeHtml(short(hat.role || hat.id, 24))}</text>
+      <circle class="edge-handle" cx="150" cy="33" r="7"></circle>
     `
     g.addEventListener('pointerdown', startDrag)
     g.addEventListener('click', (event) => {
@@ -430,16 +489,21 @@ function renderGraph() {
       event.stopPropagation()
       openNodeDetail(node.hat_id)
     })
+    g.querySelector('.edge-handle').addEventListener('pointerdown', (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      startConnection(event, node.hat_id)
+    })
     svg.appendChild(g)
   }
-  const label = state.selectedNodeId ? (hatById(state.selectedNodeId)?.name || state.selectedNodeId) : 'No node selected'
-  qs('selectedNodeLabel').textContent = label
-  qs('openNodeDetailBtn').disabled = !state.selectedNodeId
+  updateSelectionLabel()
 }
 
 let drag = null
+let connectionDrag = null
 
 function startDrag(event) {
+  if (event.target.classList?.contains('edge-handle')) return
   event.preventDefault()
   const hatId = event.currentTarget.dataset.hatId
   const node = activeNodes().find((item) => item.hat_id === hatId)
@@ -470,6 +534,44 @@ function endDrag() {
   document.removeEventListener('pointermove', onDrag)
   drag = null
   renderTopologyControls()
+}
+
+function startConnection(event, sourceHatId) {
+  const sourceNode = nodeByHatId(sourceHatId)
+  if (!sourceNode) return
+  const svg = qs('graphSvg')
+  const start = {
+    x: Number(sourceNode.x) + 150,
+    y: Number(sourceNode.y) + 33,
+  }
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+  path.setAttribute('class', 'graph-edge preview')
+  path.setAttribute('d', `M ${start.x} ${start.y} L ${start.x} ${start.y}`)
+  svg.appendChild(path)
+  connectionDrag = { sourceHatId, start, path }
+  document.addEventListener('pointermove', onConnectionMove)
+  document.addEventListener('pointerup', endConnection, { once: true })
+}
+
+function onConnectionMove(event) {
+  if (!connectionDrag) return
+  const point = svgPointFromClient(event.clientX, event.clientY)
+  const mid = (connectionDrag.start.y + point.y) / 2
+  connectionDrag.path.setAttribute(
+    'd',
+    `M ${connectionDrag.start.x} ${connectionDrag.start.y} C ${connectionDrag.start.x} ${mid}, ${point.x} ${mid}, ${point.x} ${point.y}`
+  )
+}
+
+function endConnection(event) {
+  document.removeEventListener('pointermove', onConnectionMove)
+  if (!connectionDrag) return
+  const targetNode = event.target.closest?.('.graph-node')
+  const targetHatId = targetNode?.dataset?.hatId
+  connectionDrag.path.remove()
+  const sourceHatId = connectionDrag.sourceHatId
+  connectionDrag = null
+  if (targetHatId) createEdge(sourceHatId, targetHatId)
 }
 
 async function runCluster() {
@@ -597,9 +699,17 @@ function bindControls() {
   })
   qs('saveTopologyBtn').addEventListener('click', saveTopology)
   qs('newTopologyBtn').addEventListener('click', newTopology)
-  qs('addNodeBtn').addEventListener('click', addNode)
-  qs('removeNodeBtn').addEventListener('click', removeNode)
-  qs('addEdgeBtn').addEventListener('click', addEdge)
+  qs('removeNodeBtn').addEventListener('click', removeSelected)
+  qs('graphSvg').addEventListener('dragover', (event) => {
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'copy'
+  })
+  qs('graphSvg').addEventListener('drop', (event) => {
+    event.preventDefault()
+    const hatId = event.dataTransfer.getData('text/plain')
+    const point = svgPointFromClient(event.clientX, event.clientY)
+    addNodeAt(hatId, point.x, point.y)
+  })
   qs('openNodeDetailBtn').addEventListener('click', () => {
     if (state.selectedNodeId) openNodeDetail(state.selectedNodeId)
   })
@@ -608,6 +718,12 @@ function bindControls() {
   qs('cancelNodeDetailBtn').addEventListener('click', closeNodeDetail)
   qs('nodeDetailDialog').addEventListener('click', (event) => {
     if (event.target === qs('nodeDetailDialog')) closeNodeDetail()
+  })
+  document.addEventListener('keydown', (event) => {
+    if (qs('nodeDetailDialog').open) return
+    if (event.key === 'Delete' || event.key === 'Backspace') {
+      removeSelected()
+    }
   })
   qs('runBtn').addEventListener('click', runCluster)
   qs('stopBtn').addEventListener('click', stopRun)

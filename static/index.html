@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ClusterLab</title>
-  <link rel="stylesheet" href="/static/styles.css?v=20260602-node-dialog-style">
+  <link rel="stylesheet" href="/static/styles.css?v=20260602-topology-dnd">
 </head>
 <body>
   <div class="shell">
@@ -65,8 +65,8 @@
               <h3>Hat Definition</h3>
               <span id="hatFormMode">Editing</span>
             </div>
-              <form id="hatForm" class="form-grid">
-                <input type="hidden" id="hatId">
+            <form id="hatForm" class="form-grid">
+              <input type="hidden" id="hatId">
               <label>Name <input id="hatName" required></label>
               <label>Color <input id="hatColor" type="color"></label>
               <label class="wide">Short role / purpose <textarea id="hatRole" rows="3"></textarea></label>
@@ -100,14 +100,11 @@
               <button id="newTopologyBtn">New Preset</button>
             </div>
             <div class="divider"></div>
-            <label>Add hat <select id="addHatSelect"></select></label>
-            <button id="addNodeBtn">Add To Canvas</button>
+            <div class="palette-section">
+              <h4>Hat Palette</h4>
+              <div id="hatPalette" class="hat-palette"></div>
+            </div>
             <button id="removeNodeBtn" class="danger">Remove Selected</button>
-            <div class="divider"></div>
-            <label>From <select id="edgeSource"></select></label>
-            <label>To <select id="edgeTarget"></select></label>
-            <button id="addEdgeBtn">Connect</button>
-            <div id="edgeList" class="edge-list"></div>
           </section>
 
           <section class="panel canvas-panel">
@@ -188,6 +185,6 @@
       </div>
     </form>
   </dialog>
-  <script src="/static/app.js?v=20260602-node-dialog"></script>
+  <script src="/static/app.js?v=20260602-topology-dnd"></script>
 </body>
 </html>
