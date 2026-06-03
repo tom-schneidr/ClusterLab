@@ -12,59 +12,20 @@ import {
   VISIBILITY_IDS,
 } from './js/constants.js'
 import { escapeHtml, pretty, qs, short } from './js/dom.js'
+import {
+  activeEdges,
+  activeNodes,
+  edgeById,
+  edgeTypeLabel,
+  hatById,
+  hatForNode,
+  nodeById,
+  nodeColor,
+  nodeName,
+  nodeRole,
+  typeLabel,
+} from './js/selectors.js'
 import { state } from './js/state.js'
-
-function hatById(id) {
-  return state.hats.find((hat) => hat.id === id)
-}
-
-function activeNodes() {
-  return state.activeTopology?.nodes || []
-}
-
-function activeEdges() {
-  return state.activeTopology?.edges || []
-}
-
-function nodeById(id) {
-  return activeNodes().find((node) => node.id === id)
-}
-
-function edgeById(id) {
-  return activeEdges().find((edge) => edge.id === id)
-}
-
-function hatForNode(node) {
-  return node?.type === 'hat' ? hatById(node.hat_id) : null
-}
-
-function nodeName(node) {
-  if (!node) return ''
-  return node.name || hatForNode(node)?.name || node.id || 'Node'
-}
-
-function nodeRole(node) {
-  if (!node) return ''
-  return node.role || hatForNode(node)?.role || node.type || ''
-}
-
-function nodeColor(node) {
-  if (node?.color) return node.color
-  if (node?.type === 'hat') return hatForNode(node)?.color || '#42c6ff'
-  if (node?.type === 'store') return '#9fb7ff'
-  if (node?.type === 'gate') return '#ff6b6b'
-  if (node?.type === 'tool') return '#ffd166'
-  if (node?.type === 'output') return '#42c6ff'
-  return '#42c6ff'
-}
-
-function typeLabel(type) {
-  return NODE_TYPES.find((item) => item.id === type)?.label || type || 'Node'
-}
-
-function edgeTypeLabel(type) {
-  return EDGE_TYPES.find((item) => item.id === type)?.label || type || 'Context Flow'
-}
 
 function setView(name) {
   state.view = name

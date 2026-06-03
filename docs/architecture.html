@@ -45,6 +45,7 @@
       <li><code>clusterlab/app_factory.py</code> constructs the FastAPI app, static file mount, database store, and API router.</li>
       <li><code>clusterlab/api/</code> owns HTTP routes and request schemas.</li>
       <li><code>clusterlab/engine.py</code> owns run orchestration and blackboard updates.</li>
+      <li><code>clusterlab/blackboard.py</code> owns blackboard shape, compaction, update routing, and deltas.</li>
       <li><code>clusterlab/topology.py</code> owns graph role lookup, edge traversal, and topology validation.</li>
       <li><code>clusterlab/storage.py</code> persists hats, topologies, runs, and run events in SQLite.</li>
       <li><code>clusterlab/llm.py</code> calls an OpenAI-compatible <code>/chat/completions</code> endpoint.</li>
@@ -57,6 +58,7 @@
     <pre><code>static/js/api.js        API helper
 static/js/constants.js  graph constants, tool IDs, palette templates
 static/js/dom.js        DOM and formatting helpers
+static/js/selectors.js  state-derived lookup and display helpers
 static/js/state.js      shared mutable UI state</code></pre>
   </section>
 
