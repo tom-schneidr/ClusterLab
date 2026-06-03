@@ -67,7 +67,14 @@ def call_llm(
             cost_usd=0.0,
             provider_status=f"live:{round((time.perf_counter() - started) * 1000)}ms",
         )
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, KeyError, IndexError, json.JSONDecodeError) as exc:
+    except (
+        urllib.error.URLError,
+        urllib.error.HTTPError,
+        TimeoutError,
+        KeyError,
+        IndexError,
+        json.JSONDecodeError,
+    ) as exc:
         return LlmResult(
             content="",
             usage={"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},

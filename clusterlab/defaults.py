@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 DEFAULT_HATS: list[dict] = [
     {
         "id": "executive",

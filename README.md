@@ -1,33 +1,61 @@
 # ClusterLab
 
-ClusterLab is a minimal local playground for experimenting with cognitive agent clusters.
+ClusterLab is an early local-first workbench for experimenting with cognitive agent clusters:
+small teams of specialized "hats" that plan, work, critique, verify, and preserve useful
+memory around a task.
 
-One human role can be modeled as several hats:
+The project is intentionally young, but the foundation is designed to be readable,
+testable, and easy to extend.
 
-- Executive
-- Planner
-- Context Keeper
-- Worker
-- Critic
-- Verifier
-- Memory Curator
-- Custom hats
+## Current Capabilities
 
-## Run
+- Define reusable hats such as Executive, Planner, Worker, Critic, Verifier, and Memory Curator.
+- Arrange hats into typed topology graphs with delegation, context, review, escalation, state, and approval edges.
+- Run a task through a staged cluster workflow.
+- Persist hats, topologies, runs, and run events locally in SQLite.
+- Inspect prompts, outputs, blackboard changes, decisions, objections, and verification checks.
+- Route model calls through an OpenAI-compatible endpoint.
 
-Install the Python dependencies:
+## Project Status
+
+ClusterLab is an early prototype. It is not trying to be production SaaS yet; it is a local
+research and design tool for exploring whether multi-role agent workflows can be made easier
+to inspect and iterate on.
+
+## Quickstart
+
+Create and activate a virtual environment:
 
 ```powershell
-pip install -r requirements.txt
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 ```
 
-Start the local server:
+Install the package with development dependencies:
+
+```powershell
+python -m pip install -e ".[dev]"
+```
+
+Alternatively, install only the runtime dependencies:
+
+```powershell
+python -m pip install -r requirements.txt
+```
+
+Copy the environment template:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Start the local server on `127.0.0.1:8765`:
 
 ```powershell
 python -m uvicorn app:app --reload --host 127.0.0.1 --port 8765
 ```
 
-Open:
+Open the app:
 
 ```text
 http://127.0.0.1:8765
@@ -41,4 +69,59 @@ ClusterLab runs against an OpenAI-compatible FreeRouter endpoint configured with
 - `FREEROUTER_API_KEY`
 - `FREEROUTER_MODEL`
 
-Copy `.env.example` to `.env` and fill in the values.
+Local `.env` files are loaded automatically at startup. The default values point to a
+local OpenAI-compatible server at `http://localhost:8000/v1`.
+
+For local browser access, CORS origins can be configured with:
+
+- `CLUSTERLAB_CORS_ORIGINS`
+
+Use a comma-separated list, for example:
+
+```text
+CLUSTERLAB_CORS_ORIGINS=http://127.0.0.1:8765,http://localhost:8765
+```
+
+## Development
+
+Run the test suite:
+
+```powershell
+python -m pytest
+```
+
+Run linting:
+
+```powershell
+python -m ruff check .
+```
+
+Format code:
+
+```powershell
+python -m ruff format .
+```
+
+## Architecture
+
+The architecture note lives at `docs/architecture.html`.
+
+At a high level:
+
+- `app.py` exposes the ASGI app.
+- `clusterlab/app_factory.py` builds the FastAPI app, static mount, API router, and SQLite store.
+- `clusterlab/api/` owns HTTP routes and request schemas.
+- `clusterlab/engine.py` owns cluster orchestration.
+- `clusterlab/blackboard.py` owns shared run state and deltas.
+- `clusterlab/topology.py` owns graph validation and traversal.
+- `clusterlab/storage.py` owns SQLite persistence.
+- `clusterlab/llm.py` owns the OpenAI-compatible provider boundary.
+- `static/` contains the build-free browser client.
+
+## Roadmap
+
+- Improve the topology editor UI and visual polish.
+- Add import/export for cluster presets.
+- Add richer run comparison and replay tools.
+- Add schema migrations before changing persisted data structures.
+- Add optional provider profiles for different OpenAI-compatible endpoints.

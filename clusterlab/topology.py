@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections import deque
 from typing import Any
 
-
 EDGE_TYPES: dict[str, str] = {
     "context": "Context flow",
     "delegation": "Task delegation",
@@ -25,7 +24,15 @@ def find_hat_node(
         hat = hats.get(node.get("hat_id"))
         if not hat:
             continue
-        haystack = f"{node.get('id', '')} {node.get('name', '')} {node.get('role', '')} {hat.get('id', '')} {hat.get('name', '')}".lower()
+        haystack = " ".join(
+            [
+                str(node.get("id", "")),
+                str(node.get("name", "")),
+                str(node.get("role", "")),
+                str(hat.get("id", "")),
+                str(hat.get("name", "")),
+            ]
+        ).lower()
         if any(term in haystack for term in terms):
             return node
     return None
