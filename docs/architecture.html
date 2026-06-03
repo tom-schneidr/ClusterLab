@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ClusterLab Architecture</title>
+  <style>
+    body {
+      max-width: 920px;
+      margin: 40px auto;
+      padding: 0 20px 48px;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+      color: #18212f;
+      background: #f7f9fc;
+    }
+    h1, h2 {
+      line-height: 1.15;
+    }
+    code {
+      background: #e9eef6;
+      border-radius: 4px;
+      padding: 2px 5px;
+    }
+    pre {
+      overflow: auto;
+      padding: 14px;
+      border-radius: 8px;
+      background: #111827;
+      color: #e5edf7;
+    }
+    section {
+      margin-top: 28px;
+    }
+  </style>
+</head>
+<body>
+  <h1>ClusterLab Architecture</h1>
+  <p>ClusterLab is a local-first FastAPI application with a static browser client, SQLite persistence, and an OpenAI-compatible LLM provider boundary.</p>
+
+  <section>
+    <h2>Runtime Shape</h2>
+    <ul>
+      <li><code>app.py</code> exposes the ASGI application for Uvicorn.</li>
+      <li><code>clusterlab/app_factory.py</code> constructs the FastAPI app, static file mount, database store, and API router.</li>
+      <li><code>clusterlab/api/</code> owns HTTP routes and request schemas.</li>
+      <li><code>clusterlab/engine.py</code> owns run orchestration and blackboard updates.</li>
+      <li><code>clusterlab/topology.py</code> owns graph role lookup, edge traversal, and topology validation.</li>
+      <li><code>clusterlab/storage.py</code> persists hats, topologies, runs, and run events in SQLite.</li>
+      <li><code>clusterlab/llm.py</code> calls an OpenAI-compatible <code>/chat/completions</code> endpoint.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Frontend Shape</h2>
+    <p>The frontend intentionally stays build-free while the project is small. <code>static/app.js</code> contains UI behavior, while shared primitives live in <code>static/js/</code>.</p>
+    <pre><code>static/js/api.js        API helper
+static/js/constants.js  graph constants, tool IDs, palette templates
+static/js/dom.js        DOM and formatting helpers
+static/js/state.js      shared mutable UI state</code></pre>
+  </section>
+
+  <section>
+    <h2>Run Lifecycle</h2>
+    <ol>
+      <li>The UI saves or selects a topology.</li>
+      <li><code>POST /api/runs/start</code> loads the topology and hats from SQLite.</li>
+      <li>The engine validates the topology and builds a stage plan.</li>
+      <li>Each hat receives a prompt built from the task, stage, typed edges, upstream outputs, and compact blackboard.</li>
+      <li>Outputs are appended as run events and selectively written back to the blackboard.</li>
+      <li>The final result is persisted on the run and returned with the event trace.</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>Growth Rules</h2>
+    <ul>
+      <li>Keep route handlers thin; move business logic into domain modules.</li>
+      <li>Add tests at API, storage, topology, and engine boundaries before large behavior changes.</li>
+      <li>Keep SQLite until multi-user or remote deployment requirements are concrete.</li>
+      <li>Keep vanilla JavaScript until UI complexity justifies a build step.</li>
+      <li>Prefer explicit migrations before changing persisted schema.</li>
+    </ul>
+  </section>
+</body>
+</html>
