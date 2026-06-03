@@ -402,7 +402,8 @@ function renderTopologyControls() {
     state.activeTopology = JSON.parse(JSON.stringify(state.topologies[0]))
   }
   const topology = state.activeTopology || blankTopology()
-  qs('topologySelect').innerHTML = state.topologies.map((top) => (
+  const unsavedOption = topology.id ? '' : '<option value="" selected>New unsaved preset</option>'
+  qs('topologySelect').innerHTML = unsavedOption + state.topologies.map((top) => (
     `<option value="${escapeHtml(top.id)}" ${top.id === topology.id ? 'selected' : ''}>${escapeHtml(top.name)}</option>`
   )).join('')
   qs('topologyName').value = topology.name || ''
@@ -593,11 +594,7 @@ function topologyChanged() {
 }
 
 function newTopology() {
-  const template = state.topologies.find((topology) => topology.id === 'general_super_agent_cluster') || state.activeTopology || blankTopology()
-  state.activeTopology = JSON.parse(JSON.stringify(template))
-  state.activeTopology.id = null
-  state.activeTopology.name = 'New General Super Agent Cluster'
-  state.activeTopology.schema_version = 2
+  state.activeTopology = blankTopology()
   state.selectedNodeId = null
   state.selectedEdgeId = null
   state.dirtyTopology = true
