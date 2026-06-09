@@ -2,21 +2,30 @@ import { api } from './js/api.js'
 import {
   AUTHORITY_IDS,
   EDGE_TYPES,
-  GRAPH_MAX_X,
-  GRAPH_MAX_Y,
-  NODE_HEIGHT,
   NODE_TYPES,
-  NODE_WIDTH,
   STRUCTURAL_GROUPS,
   TOOL_IDS,
   VISIBILITY_IDS,
 } from './js/constants.js'
+import {
+  clearExecution,
+  dropNodePosition,
+  graphMaxX,
+  graphMaxY,
+  initGraph,
+  paintGraph,
+  resetViewport,
+  setExecutionFromRun,
+  startRunPolling,
+  stopRunPolling,
+  syncCanvasSize,
+} from './js/graph/index.js'
+import { nodeHeight } from './js/graph/ports.js'
 import { escapeHtml, pretty, qs, short } from './js/dom.js'
 import {
   activeEdges,
   activeNodes,
   edgeById,
-  edgeTypeLabel,
   hatById,
   hatForNode,
   nodeById,
@@ -35,6 +44,10 @@ function setView(name) {
   document.querySelectorAll('.view').forEach((view) => {
     view.classList.toggle('active', view.id === `view-${name}`)
   })
+  if (name === 'topology') {
+    syncCanvasSize()
+    paintGraph()
+  }
 }
 
 function bindNav() {
@@ -57,7 +70,7 @@ function renderAll() {
   renderHats()
   renderHatForm()
   renderTopologyControls()
-  renderGraph()
+  paintGraph()
   renderRun()
 }
 
@@ -351,7 +364,7 @@ function edgePathExists(sourceId, targetId, types) {
 function topologyChanged() {
   state.dirtyTopology = true
   renderTopologyControls()
-  renderGraph()
+  paintGraph()
 }
 
 function newTopology() {
@@ -359,6 +372,7 @@ function newTopology() {
   state.selectedNodeId = null
   state.selectedEdgeId = null
   state.dirtyTopology = true
+  resetViewport()
   renderAll()
 }
 
@@ -385,23 +399,17 @@ function loadTopology(id) {
   state.selectedNodeId = null
   state.selectedEdgeId = null
   state.dirtyTopology = false
+  resetViewport()
   renderAll()
-}
-
-function svgPointFromClient(clientX, clientY) {
-  const svg = qs('graphSvg')
-  const point = svg.createSVGPoint()
-  point.x = clientX
-  point.y = clientY
-  return point.matrixTransform(svg.getScreenCTM().inverse())
 }
 
 function addNodeAt(payload, x, y) {
   if (!payload || !state.activeTopology) return
   const node = nodeFromPayload(payload)
   if (!node || paletteItemPlaced({ ...payload, kind: payload.kind, template_id: payload.template_id })) return
-  node.x = Math.max(20, Math.min(GRAPH_MAX_X, x - NODE_WIDTH / 2))
-  node.y = Math.max(20, Math.min(GRAPH_MAX_Y, y - NODE_HEIGHT / 2))
+  const pos = dropNodePosition(x, y, node)
+  node.x = pos.x
+  node.y = pos.y
   state.activeTopology.nodes.push(node)
   selectNode(node.id)
   topologyChanged()
@@ -484,17 +492,18 @@ function removeNode() {
   topologyChanged()
 }
 
-function createEdge(source, target) {
+function createEdge(source, target, edgeType) {
   if (!source || !target || source === target || !state.activeTopology) return
-  const exists = activeEdges().some((edge) => edge.source === source && edge.target === target && edge.type === state.newEdgeType)
+  const type = edgeType || state.newEdgeType
+  const exists = activeEdges().some((edge) => edge.source === source && edge.target === target && edge.type === type)
   if (exists) return
   state.activeTopology.edges.push({
     id: uniqueEdgeId(),
     source,
     target,
-    type: state.newEdgeType,
-    blocking: ['delegation', 'review', 'escalation', 'approval'].includes(state.newEdgeType),
-    payload: defaultPayloadForEdge(state.newEdgeType),
+    type,
+    blocking: ['delegation', 'review', 'escalation', 'approval'].includes(type),
+    payload: defaultPayloadForEdge(type),
   })
   state.selectedNodeId = null
   state.selectedEdgeId = state.activeTopology.edges[state.activeTopology.edges.length - 1].id
@@ -540,32 +549,24 @@ function removeSelected() {
 
 function selectNode(nodeId) {
   const node = nodeById(nodeId)
+  const changed = state.selectedNodeId !== nodeId || state.selectedEdgeId !== null
   state.selectedNodeId = nodeId
   state.selectedHatId = node?.hat_id || state.selectedHatId
   state.selectedEdgeId = null
-  document.querySelectorAll('.graph-node').forEach((item) => {
-    item.classList.toggle('selected', item.dataset.nodeId === nodeId)
-  })
-  document.querySelectorAll('.graph-edge').forEach((item) => {
-    item.classList.remove('selected')
-  })
   updateSelectionLabel()
   renderSelectionInspector()
+  if (changed) paintGraph()
 }
 
 function selectEdge(edgeId) {
   const edge = edgeById(edgeId)
   if (!edge) return
+  const changed = state.selectedEdgeId !== edgeId || state.selectedNodeId !== null
   state.selectedNodeId = null
   state.selectedEdgeId = edgeId
-  document.querySelectorAll('.graph-node').forEach((item) => {
-    item.classList.remove('selected')
-  })
-  document.querySelectorAll('.graph-edge').forEach((item) => {
-    item.classList.toggle('selected', item.dataset.edgeId === edgeId)
-  })
   updateSelectionLabel()
   renderSelectionInspector()
+  if (changed) paintGraph()
 }
 
 function updateSelectionLabel() {
@@ -596,6 +597,9 @@ function openNodeDetail(nodeId) {
     `<option value="${escapeHtml(type.id)}" ${type.id === node.type ? 'selected' : ''}>${escapeHtml(type.label)}</option>`
   )).join('')
   qs('nodeDetailColor').value = nodeColor(node)
+  syncCanvasSize()
+  qs('nodeDetailX').max = String(graphMaxX())
+  qs('nodeDetailY').max = String(graphMaxY(nodeHeight(node)))
   qs('nodeDetailX').value = Math.round(Number(node.x) || 20)
   qs('nodeDetailY').value = Math.round(Number(node.y) || 20)
   qs('nodeDetailRole').value = nodeRole(node)
@@ -632,8 +636,8 @@ function saveNodeDetail(event) {
   node.type = qs('nodeDetailType').value
   node.name = qs('nodeDetailName').value.trim()
   node.color = qs('nodeDetailColor').value
-  node.x = Math.max(20, Math.min(GRAPH_MAX_X, Number(qs('nodeDetailX').value || node.x)))
-  node.y = Math.max(20, Math.min(GRAPH_MAX_Y, Number(qs('nodeDetailY').value || node.y)))
+  node.x = Math.max(0, Math.min(graphMaxX(), Number(qs('nodeDetailX').value || node.x)))
+  node.y = Math.max(0, Math.min(graphMaxY(nodeHeight(node)), Number(qs('nodeDetailY').value || node.y)))
   node.role = qs('nodeDetailRole').value.trim()
   node.system_prompt = qs('nodeDetailSystem').value.trim()
   node.output_contract = qs('nodeDetailOutputContract').value.trim()
@@ -645,162 +649,6 @@ function saveNodeDetail(event) {
   state.dirtyTopology = true
   closeNodeDetail()
   renderAll()
-}
-
-function renderGraph() {
-  const svg = qs('graphSvg')
-  const marker = svg.querySelector('defs')?.outerHTML || ''
-  svg.innerHTML = marker
-  const nodes = activeNodes()
-  const nodeMap = Object.fromEntries(nodes.map((node) => [node.id, node]))
-  for (const edge of activeEdges()) {
-    const source = nodeMap[edge.source]
-    const target = nodeMap[edge.target]
-    if (!source || !target) continue
-    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-    const x1 = Number(source.x) + NODE_WIDTH / 2
-    const y1 = Number(source.y) + NODE_HEIGHT / 2
-    const x2 = Number(target.x) + NODE_WIDTH / 2
-    const y2 = Number(target.y) + NODE_HEIGHT / 2
-    const mid = (y1 + y2) / 2
-    path.setAttribute('d', `M ${x1} ${y1} C ${x1} ${mid}, ${x2} ${mid}, ${x2} ${y2}`)
-    path.setAttribute('class', `graph-edge edge-${edge.type || 'context'} ${edge.blocking ? 'blocking' : ''} ${state.selectedEdgeId === edge.id ? 'selected' : ''}`)
-    path.dataset.edgeId = edge.id
-    path.addEventListener('click', (event) => {
-      event.stopPropagation()
-      selectEdge(edge.id)
-    })
-    svg.appendChild(path)
-
-    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text')
-    label.setAttribute('x', String((x1 + x2) / 2))
-    label.setAttribute('y', String((y1 + y2) / 2 - 5))
-    label.setAttribute('class', 'edge-label')
-    label.dataset.edgeId = edge.id
-    label.textContent = edgeTypeLabel(edge.type)
-    label.addEventListener('click', (event) => {
-      event.stopPropagation()
-      selectEdge(edge.id)
-    })
-    svg.appendChild(label)
-  }
-  for (const node of nodes) {
-    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g')
-    g.setAttribute('class', `graph-node node-${node.type || 'hat'} ${state.selectedNodeId === node.id ? 'selected' : ''}`)
-    g.setAttribute('transform', `translate(${node.x}, ${node.y})`)
-    g.dataset.nodeId = node.id
-    g.innerHTML = nodeMarkup(node)
-    g.addEventListener('pointerdown', startDrag)
-    g.addEventListener('click', (event) => {
-      if (event.detail >= 2) {
-        event.preventDefault()
-        openNodeDetail(node.id)
-        return
-      }
-      selectNode(node.id)
-    })
-    g.addEventListener('dblclick', (event) => {
-      event.preventDefault()
-      event.stopPropagation()
-      openNodeDetail(node.id)
-    })
-    g.querySelector('.edge-handle').addEventListener('pointerdown', (event) => {
-      event.preventDefault()
-      event.stopPropagation()
-      startConnection(event, node.id)
-    })
-    svg.appendChild(g)
-  }
-  updateSelectionLabel()
-}
-
-function nodeMarkup(node) {
-  const shape = node.type === 'gate'
-    ? `<path class="node-shape" d="M 78 2 L 154 33 L 78 64 L 2 33 Z"></path>`
-    : `<rect class="node-shape" width="${NODE_WIDTH}" height="${NODE_HEIGHT}"></rect>`
-  return `
-    ${shape}
-    <circle cx="18" cy="22" r="8" fill="${escapeHtml(nodeColor(node))}"></circle>
-    <text x="33" y="25">${escapeHtml(short(nodeName(node), 20))}</text>
-    <text class="role" x="14" y="48">${escapeHtml(short(nodeRole(node), 24))}</text>
-    <text class="node-kind" x="116" y="14">${escapeHtml(typeLabel(node.type))}</text>
-    <circle class="edge-handle" cx="150" cy="33" r="7"></circle>
-  `
-}
-
-let drag = null
-let connectionDrag = null
-
-function startDrag(event) {
-  if (event.target.classList?.contains('edge-handle')) return
-  event.preventDefault()
-  const nodeId = event.currentTarget.dataset.nodeId
-  const node = nodeById(nodeId)
-  if (!node) return
-  selectNode(nodeId)
-  drag = {
-    nodeId,
-    startClientX: event.clientX,
-    startClientY: event.clientY,
-    startX: Number(node.x),
-    startY: Number(node.y),
-  }
-  document.addEventListener('pointermove', onDrag)
-  document.addEventListener('pointerup', endDrag, { once: true })
-}
-
-function onDrag(event) {
-  if (!drag) return
-  const node = nodeById(drag.nodeId)
-  if (!node) return
-  node.x = Math.max(20, Math.min(GRAPH_MAX_X, drag.startX + (event.clientX - drag.startClientX)))
-  node.y = Math.max(20, Math.min(GRAPH_MAX_Y, drag.startY + (event.clientY - drag.startClientY)))
-  state.dirtyTopology = true
-  renderGraph()
-}
-
-function endDrag() {
-  document.removeEventListener('pointermove', onDrag)
-  drag = null
-  renderTopologyControls()
-}
-
-function startConnection(event, sourceNodeId) {
-  const sourceNode = nodeById(sourceNodeId)
-  if (!sourceNode) return
-  const svg = qs('graphSvg')
-  const start = {
-    x: Number(sourceNode.x) + NODE_WIDTH - 6,
-    y: Number(sourceNode.y) + NODE_HEIGHT / 2,
-  }
-  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-  path.setAttribute('class', `graph-edge preview edge-${state.newEdgeType}`)
-  path.setAttribute('d', `M ${start.x} ${start.y} L ${start.x} ${start.y}`)
-  svg.appendChild(path)
-  connectionDrag = { sourceNodeId, start, path }
-  document.addEventListener('pointermove', onConnectionMove)
-  document.addEventListener('pointerup', endConnection, { once: true })
-}
-
-function onConnectionMove(event) {
-  if (!connectionDrag) return
-  const point = svgPointFromClient(event.clientX, event.clientY)
-  const mid = (connectionDrag.start.y + point.y) / 2
-  connectionDrag.path.setAttribute(
-    'd',
-    `M ${connectionDrag.start.x} ${connectionDrag.start.y} C ${connectionDrag.start.x} ${mid}, ${point.x} ${mid}, ${point.x} ${point.y}`
-  )
-}
-
-function endConnection(event) {
-  document.removeEventListener('pointermove', onConnectionMove)
-  if (!connectionDrag) return
-  const targetNode = event.target.closest?.('.graph-node')
-  const targetNodeId = targetNode?.dataset?.nodeId
-  connectionDrag.path.remove()
-  const sourceNodeId = connectionDrag.sourceNodeId
-  connectionDrag = null
-  if (targetNodeId) createEdge(sourceNodeId, targetNodeId)
 }
 
 async function runCluster() {
@@ -815,10 +663,20 @@ async function runCluster() {
   }
   qs('runBtn').textContent = 'Running...'
   qs('runBtn').disabled = true
+  stopRunPolling()
+  clearExecution()
   try {
     state.currentRun = await api('/api/runs/start', { method: 'POST', body: JSON.stringify(body) })
     state.selectedEventSeq = state.currentRun.events?.[0]?.seq ?? null
-    setView('analysis')
+    setExecutionFromRun(state.currentRun)
+    if (state.currentRun.status === 'running') {
+      startRunPolling(state.currentRun.id, (run) => {
+        state.currentRun = run
+        setExecutionFromRun(run)
+        paintGraph()
+        renderRun()
+      })
+    }
     renderRun()
   } finally {
     qs('runBtn').textContent = 'Run Cluster'
@@ -829,13 +687,20 @@ async function runCluster() {
 async function stopRun() {
   if (!state.currentRun) return
   await api(`/api/runs/${encodeURIComponent(state.currentRun.id)}/stop`, { method: 'POST' })
-  state.currentRun.status = 'stopped'
+  stopRunPolling()
+  const run = await api(`/api/runs/${encodeURIComponent(state.currentRun.id)}`)
+  state.currentRun = run
+  setExecutionFromRun(run)
+  paintGraph()
   renderRun()
 }
 
 function resetRun() {
+  stopRunPolling()
+  clearExecution()
   state.currentRun = null
   state.selectedEventSeq = null
+  paintGraph()
   renderRun()
 }
 
@@ -916,6 +781,19 @@ function eventDetailText(event) {
 }
 
 function bindControls() {
+  initGraph({
+    getNode: nodeById,
+    onSelectNode: selectNode,
+    onSelectEdge: selectEdge,
+    onOpenNodeDetail: openNodeDetail,
+    onCreateEdge: createEdge,
+    onDropNode: addNodeAt,
+    onNodeMoved: (finished) => {
+      state.dirtyTopology = true
+      paintGraph()
+      if (finished) renderTopologyControls()
+    },
+  })
   bindNav()
   qs('hatForm').addEventListener('submit', saveHat)
   qs('newHatBtn').addEventListener('click', () => {
@@ -937,18 +815,6 @@ function bindControls() {
   qs('saveTopologyBtn').addEventListener('click', saveTopology)
   qs('newTopologyBtn').addEventListener('click', newTopology)
   qs('removeNodeBtn').addEventListener('click', removeSelected)
-  qs('graphSvg').addEventListener('dragover', (event) => {
-    event.preventDefault()
-    event.dataTransfer.dropEffect = 'copy'
-  })
-  qs('graphSvg').addEventListener('drop', (event) => {
-    event.preventDefault()
-    const raw = event.dataTransfer.getData('application/json') || event.dataTransfer.getData('text/plain')
-    if (!raw) return
-    const payload = JSON.parse(raw)
-    const point = svgPointFromClient(event.clientX, event.clientY)
-    addNodeAt(payload, point.x, point.y)
-  })
   qs('openNodeDetailBtn').addEventListener('click', () => {
     if (state.selectedNodeId) openNodeDetail(state.selectedNodeId)
   })

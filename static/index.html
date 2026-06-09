@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ClusterLab</title>
-  <link rel="stylesheet" href="/static/styles.css?v=20260602-typed-graph">
+  <link rel="stylesheet" href="/static/styles.css?v=20260609-full-canvas">
 </head>
 <body>
   <div class="shell">
@@ -123,20 +123,15 @@
             <div class="canvas-head">
               <div>
                 <h3>Cluster Canvas</h3>
-                <p>Drag nodes onto the graph. Typed edges define context, delegation, review, state, escalation, and approval flow.</p>
+                <p>Drag background to pan, scroll to zoom. Connect typed ports. Run the cluster to see live node activity here.</p>
               </div>
               <div class="selected-node-actions">
                 <span id="selectedNodeLabel">No node selected</span>
                 <button id="openNodeDetailBtn" type="button" disabled>Open Details</button>
               </div>
             </div>
-            <svg id="graphSvg" viewBox="0 0 900 650" role="img" aria-label="Cluster topology graph">
-              <defs>
-                <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                  <path d="M 0 0 L 10 5 L 0 10 z"></path>
-                </marker>
-              </defs>
-            </svg>
+            <div id="graphRunStatus" class="graph-run-status" aria-live="polite"></div>
+            <svg id="graphSvg" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Cluster topology graph"></svg>
           </section>
         </div>
       </section>
@@ -183,8 +178,8 @@
       <label>Name <input id="nodeDetailName" required></label>
       <label>Type <select id="nodeDetailType"></select></label>
       <label>Color <input id="nodeDetailColor" type="color"></label>
-      <label>X <input id="nodeDetailX" type="number" min="20" max="760" step="1"></label>
-      <label>Y <input id="nodeDetailY" type="number" min="20" max="580" step="1"></label>
+      <label>X <input id="nodeDetailX" type="number" min="0" step="1"></label>
+      <label>Y <input id="nodeDetailY" type="number" min="0" step="1"></label>
       <label class="wide">Short role / purpose <textarea id="nodeDetailRole" rows="3"></textarea></label>
       <label class="wide">System prompt / node instruction <textarea id="nodeDetailSystem" rows="6"></textarea></label>
       <label class="wide">Output contract <textarea id="nodeDetailOutputContract" rows="3"></textarea></label>
@@ -206,6 +201,6 @@
       </div>
     </form>
   </dialog>
-  <script type="module" src="/static/app.js?v=20260603-refactor-modules"></script>
+  <script type="module" src="/static/app.js?v=20260609-large-world"></script>
 </body>
 </html>

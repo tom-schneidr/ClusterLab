@@ -202,6 +202,13 @@ class ClusterStore:
                 (now_iso(), run_id),
             )
 
+    def mark_run_failed(self, run_id: str) -> None:
+        with self.connect() as conn:
+            conn.execute(
+                "update runs set status = 'failed', updated_at = ? where id = ?",
+                (now_iso(), run_id),
+            )
+
     def get_run(self, run_id: str) -> dict[str, Any] | None:
         with self.connect() as conn:
             row = conn.execute("select * from runs where id = ?", (run_id,)).fetchone()

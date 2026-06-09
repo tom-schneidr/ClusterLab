@@ -163,7 +163,4 @@ export const STRUCTURAL_GROUPS = [
   },
 ]
 
-export const NODE_WIDTH = 156
-export const NODE_HEIGHT = 66
-export const GRAPH_MAX_X = 760
-export const GRAPH_MAX_Y = 580
+export { NODE_WIDTH } from './graph/constants.js'

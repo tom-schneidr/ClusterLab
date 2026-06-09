@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import os
+import threading
+import traceback
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
 from clusterlab.api.schemas import HatDefinitionIn, RunStartIn, TopologyIn
+from clusterlab.blackboard import initial_blackboard
 from clusterlab.engine import run_cluster
 from clusterlab.storage import ClusterStore
 
@@ -71,13 +74,29 @@ def create_api_router(store: ClusterStore) -> APIRouter:
         if not topology:
             raise HTTPException(404, detail="topology not found")
         hats = {hat["id"]: hat for hat in store.list_hats()}
-        return run_cluster(
-            store=store,
-            topology=topology,
-            hats=hats,
+        blackboard = initial_blackboard(body.task)
+        run = store.create_run(
+            topology_id=topology["id"],
             task=body.task,
-            max_turns=body.max_turns,
+            blackboard=blackboard,
         )
+
+        def worker() -> None:
+            try:
+                run_cluster(
+                    store=store,
+                    topology=topology,
+                    hats=hats,
+                    task=body.task,
+                    max_turns=body.max_turns,
+                    run_id=run["id"],
+                )
+            except Exception:
+                traceback.print_exc()
+                store.mark_run_failed(run["id"])
+
+        threading.Thread(target=worker, daemon=True).start()
+        return {**run, "events": []}
 
     @router.get("/runs")
     def list_runs() -> list[dict[str, Any]]:

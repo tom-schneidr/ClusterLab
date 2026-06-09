@@ -63,6 +63,11 @@ STAGE_INSTRUCTIONS: dict[str, str] = {
 }
 
 
+def _run_is_stopped(store: Any, run_id: str) -> bool:
+    current = store.get_run(run_id)
+    return bool(current and current.get("status") == "stopped")
+
+
 def run_cluster(
     *,
     store: Any,
@@ -70,36 +75,48 @@ def run_cluster(
     hats: dict[str, dict[str, Any]],
     task: str,
     max_turns: int = 12,
+    run_id: str | None = None,
 ) -> dict[str, Any]:
-    blackboard = initial_blackboard(task)
     validation = validate_topology(topology, hats)
     stage_plan = build_execution_plan(topology, hats, max_turns=max_turns)
-    run = store.create_run(
-        topology_id=topology["id"],
-        task=task,
-        blackboard=blackboard,
-    )
-    seq = 0
-    store.append_event(
-        run_id=run["id"],
-        seq=seq,
-        event_type="run_started",
-        output="Run started.",
-        blackboard_after=blackboard,
-        metadata={
-            "validation": validation,
-            "execution_plan": [
-                {"stage": stage["key"], "node_id": stage["node"]["id"]}
-                for stage in stage_plan
-            ],
-        },
-    )
-    seq += 1
+    if run_id:
+        run = store.get_run(run_id)
+        if not run:
+            raise ValueError(f"run not found: {run_id}")
+        blackboard = copy.deepcopy(run.get("blackboard") or initial_blackboard(task))
+    else:
+        blackboard = initial_blackboard(task)
+        run = store.create_run(
+            topology_id=topology["id"],
+            task=task,
+            blackboard=blackboard,
+        )
+    seq = len(store.list_events(run["id"]))
+    if seq == 0:
+        store.append_event(
+            run_id=run["id"],
+            seq=seq,
+            event_type="run_started",
+            output="Run started.",
+            blackboard_after=blackboard,
+            metadata={
+                "validation": validation,
+                "execution_plan": [
+                    {"stage": stage["key"], "node_id": stage["node"]["id"]}
+                    for stage in stage_plan
+                ],
+            },
+        )
+        seq += 1
 
     stage_outputs: dict[str, str] = {}
     node_outputs: dict[str, str] = {}
 
     for step_index, stage in enumerate(stage_plan, start=1):
+        if _run_is_stopped(store, run["id"]):
+            stopped = store.get_run(run["id"]) or run
+            stopped["events"] = store.list_events(run["id"])
+            return stopped
         node = stage["node"]
         hat = hats.get(node.get("hat_id"))
         if not hat:

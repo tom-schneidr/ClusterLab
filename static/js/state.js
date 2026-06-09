@@ -11,4 +11,16 @@ export const state = {
   view: 'hats',
   dirtyTopology: false,
   editingNodeId: null,
+  graphView: { w: 1200, h: 800 },
+  graphWorld: { w: 4800, h: 3600 },
+  viewport: { x: 0, y: 0, scale: 1 },
+  execution: {
+    runId: null,
+    activeNodeId: null,
+    completedNodeIds: [],
+    activeEdgeIds: [],
+    stepLabel: '',
+    stepIndex: 0,
+    stepTotal: 0,
+  },
 }

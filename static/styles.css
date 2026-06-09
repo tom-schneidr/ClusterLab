@@ -536,7 +536,8 @@ legend {
 .canvas-panel {
   overflow: hidden;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-height: calc(100vh - 160px);
 }
 
 .canvas-head {
@@ -559,78 +560,112 @@ button:disabled {
   opacity: 0.48;
 }
 
+.graph-run-status {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(66, 198, 255, 0.06);
+  font-size: 12px;
+}
+
+.graph-run-status.visible {
+  display: flex;
+}
+
+.run-status-text {
+  color: #c8e8f8;
+}
+
+.run-status-link {
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0;
+}
+
 #graphSvg {
+  display: block;
   width: 100%;
   height: 100%;
-  min-height: 620px;
-  background:
-    linear-gradient(#18202d 1px, transparent 1px),
-    linear-gradient(90deg, #18202d 1px, transparent 1px),
-    #0f151e;
-  background-size: 28px 28px;
+  min-height: 0;
+  background: #1e1e1e;
+}
+
+.graph-background,
+#graphPanLayer {
+  fill: #1e1e1e;
+  cursor: grab;
+}
+
+.graph-background.panning,
+#graphPanLayer.panning {
+  cursor: grabbing;
+}
+
+.graph-grid,
+#graphGrid {
+  pointer-events: none;
 }
 
 #arrow path {
-  fill: #6f7b88;
+  fill: #8a8a8a;
 }
 
 .graph-edge {
-  stroke: #6f7b88;
-  stroke-width: 1.5;
+  stroke: #8a8a8a;
+  stroke-width: 2;
   marker-end: url(#arrow);
   cursor: pointer;
   fill: none;
+  transition: stroke 0.15s ease;
 }
 
-.edge-context {
-  stroke: #8fb7ff;
-}
-
-.edge-delegation {
-  stroke: #ffd166;
-}
-
-.edge-review {
-  stroke: #ff6b6b;
-}
-
-.edge-state {
-  stroke: #2bd9a3;
-  stroke-dasharray: 5 4;
-}
-
-.edge-escalation {
-  stroke: #f78c6b;
-  stroke-dasharray: 8 4;
-}
-
-.edge-approval {
-  stroke: #42c6ff;
-}
+.graph-edge.edge-context { stroke: #8fb7ff; }
+.graph-edge.edge-delegation { stroke: #ffd166; }
+.graph-edge.edge-review { stroke: #ff6b6b; }
+.graph-edge.edge-state { stroke: #2bd9a3; stroke-dasharray: 6 4; }
+.graph-edge.edge-escalation { stroke: #f78c6b; stroke-dasharray: 8 4; }
+.graph-edge.edge-approval { stroke: #42c6ff; }
 
 .graph-edge.blocking {
-  stroke-width: 2.1;
+  stroke-width: 2.6;
 }
 
 .graph-edge.selected {
-  stroke: var(--accent);
+  stroke: #ffffff;
+  stroke-width: 3.2;
+}
+
+.graph-edge.active {
   stroke-width: 3;
+  stroke-dasharray: 8 6;
+  animation: edge-flow 0.9s linear infinite;
+}
+
+@keyframes edge-flow {
+  to { stroke-dashoffset: -18; }
 }
 
 .graph-edge.preview {
   stroke: var(--accent);
-  stroke-dasharray: 5 5;
+  stroke-dasharray: 6 5;
   marker-end: none;
   pointer-events: none;
+  opacity: 0.9;
 }
 
 .edge-label {
-  fill: #d9e7ef;
+  fill: #e8e8e8;
   paint-order: stroke;
-  stroke: #0f151e;
+  stroke: #1e1e1e;
   stroke-width: 4px;
-  font-size: 10px;
-  font-weight: 750;
+  font-size: 9px;
+  font-weight: 700;
   text-anchor: middle;
   cursor: pointer;
 }
@@ -639,66 +674,93 @@ button:disabled {
   cursor: grab;
 }
 
-.graph-node.selected .node-shape {
+.graph-node .node-bg {
+  fill: #2b2b2b;
+  stroke: #3c3c3c;
+  stroke-width: 1;
+}
+
+.graph-node.selected .node-bg {
   stroke: var(--accent);
   stroke-width: 2;
+  filter: url(#nodeGlow);
 }
 
-.graph-node .node-shape {
-  fill: #161f2c;
-  stroke: #314052;
-  rx: 7;
+.graph-node.executing .node-bg {
+  stroke: #42c6ff;
+  stroke-width: 2.5;
+  animation: node-pulse 1.1s ease-in-out infinite;
 }
 
-.graph-node.node-store .node-shape {
-  fill: #132337;
-  stroke: #466184;
+.graph-node.completed .node-bg {
+  stroke: #2bd9a3;
+  stroke-width: 1.5;
 }
 
-.graph-node.node-gate .node-shape {
-  fill: #2a1720;
-  stroke: #7a4250;
+@keyframes node-pulse {
+  0%, 100% { filter: drop-shadow(0 0 2px rgba(66, 198, 255, 0.4)); }
+  50% { filter: drop-shadow(0 0 10px rgba(66, 198, 255, 0.95)); }
 }
 
-.graph-node.node-tool .node-shape {
-  fill: #2a2515;
-  stroke: #786b38;
+.graph-node .node-header-fade {
+  opacity: 0.35;
 }
 
-.graph-node.node-output .node-shape {
-  fill: #102736;
-  stroke: #3a7890;
-}
-
-.graph-node text {
-  fill: var(--text);
-  font-size: 13px;
-  font-weight: 760;
+.graph-node .node-title {
+  fill: #111;
+  font-size: 12px;
+  font-weight: 800;
   pointer-events: none;
 }
 
-.graph-node .role {
-  fill: var(--muted);
-  font-size: 10px;
-  font-weight: 600;
-}
-
 .graph-node .node-kind {
-  fill: var(--faint);
-  font-size: 9px;
+  fill: rgba(0, 0, 0, 0.55);
+  font-size: 8px;
   font-weight: 800;
   text-transform: uppercase;
+  pointer-events: none;
 }
 
-.edge-handle {
-  fill: #101722;
-  stroke: var(--accent);
-  stroke-width: 2;
+.graph-node .node-subtitle {
+  fill: #9a9a9a;
+  font-size: 10px;
+  font-weight: 500;
+  pointer-events: none;
+}
+
+.graph-node .port-dot {
+  fill: #555;
+  stroke: #888;
+  stroke-width: 1.5;
   cursor: crosshair;
 }
 
-.edge-handle:hover {
-  fill: var(--accent);
+.graph-node .port.connected .port-dot {
+  stroke-width: 2;
+}
+
+.graph-node .port-in.port-context.connected .port-dot { fill: #8fb7ff; stroke: #8fb7ff; }
+.graph-node .port-out.port-context.connected .port-dot { fill: #8fb7ff; stroke: #8fb7ff; }
+.graph-node .port-in.port-delegation.connected .port-dot { fill: #ffd166; stroke: #ffd166; }
+.graph-node .port-out.port-delegation.connected .port-dot { fill: #ffd166; stroke: #ffd166; }
+.graph-node .port-in.port-review.connected .port-dot { fill: #ff6b6b; stroke: #ff6b6b; }
+.graph-node .port-out.port-review.connected .port-dot { fill: #ff6b6b; stroke: #ff6b6b; }
+.graph-node .port-in.port-state.connected .port-dot { fill: #2bd9a3; stroke: #2bd9a3; }
+.graph-node .port-out.port-state.connected .port-dot { fill: #2bd9a3; stroke: #2bd9a3; }
+.graph-node .port-in.port-escalation.connected .port-dot { fill: #f78c6b; stroke: #f78c6b; }
+.graph-node .port-out.port-escalation.connected .port-dot { fill: #f78c6b; stroke: #f78c6b; }
+.graph-node .port-in.port-approval.connected .port-dot { fill: #42c6ff; stroke: #42c6ff; }
+.graph-node .port-out.port-approval.connected .port-dot { fill: #42c6ff; stroke: #42c6ff; }
+
+.graph-node .port-label {
+  fill: #7a7a7a;
+  font-size: 9px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.graph-node .port.connected .port-label {
+  fill: #c8c8c8;
 }
 
 .analysis-layout {

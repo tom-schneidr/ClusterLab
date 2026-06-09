@@ -23,6 +23,9 @@ dev = [
   "ruff>=0.8,<1"
 ]
 
+[project.scripts]
+clusterlab = "clusterlab.cli:main"
+
 [tool.setuptools]
 packages = ["clusterlab", "clusterlab.api"]
 py-modules = ["app"]

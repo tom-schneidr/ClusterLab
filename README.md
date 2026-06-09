@@ -52,7 +52,13 @@ Copy-Item .env.example .env
 Start the local server on `127.0.0.1:8765`:
 
 ```powershell
-python -m uvicorn app:app --reload --host 127.0.0.1 --port 8765
+clusterlab
+```
+
+Or without the console script:
+
+```powershell
+python -m clusterlab
 ```
 
 Open the app:
@@ -60,6 +66,16 @@ Open the app:
 ```text
 http://127.0.0.1:8765
 ```
+
+If the page never loads, a previous server instance may still be holding port `8765`
+(common after using auto-reload or closing the terminal without stopping the server).
+Start on another port:
+
+```powershell
+clusterlab --port 8766
+```
+
+Then open `http://127.0.0.1:8766`.
 
 ## LLM Configuration
 
