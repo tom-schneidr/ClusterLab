@@ -11,6 +11,16 @@ EDGE_TYPES: dict[str, str] = {
     "escalation": "Escalation or revision",
     "approval": "Approval path",
 }
+NODE_TYPES = {"hat", "store", "gate", "tool", "output"}
+BLOCKING_VALIDATION_CODES = {
+    "duplicate_node_id",
+    "duplicate_edge_id",
+    "missing_node_id",
+    "missing_edge_id",
+    "unknown_node_type",
+    "unknown_edge_type",
+    "broken_edge",
+}
 
 
 def find_hat_node(
@@ -50,11 +60,7 @@ def edge_path_exists(
     target_id = target.get("id")
     if not source_id or not target_id:
         return False
-    edges = [
-        edge
-        for edge in topology.get("edges", [])
-        if edge.get("type") in edge_types
-    ]
+    edges = [edge for edge in topology.get("edges", []) if edge.get("type") in edge_types]
     by_source: dict[str, list[dict[str, Any]]] = {}
     for edge in edges:
         by_source.setdefault(edge.get("source") or "", []).append(edge)
@@ -90,6 +96,21 @@ def validate_topology(topology: dict[str, Any], hats: dict[str, dict[str, Any]])
         "verifier": find_hat_node(topology, hats, ["verifier"]),
         "memory": find_hat_node(topology, hats, ["memory"]),
     }
+    node_ids = [node.get("id") for node in nodes]
+    edge_ids = [edge.get("id") for edge in edges]
+    for node in nodes:
+        if not node.get("id"):
+            warn("missing_node_id", "A topology node is missing an id.")
+        if node.get("type") not in NODE_TYPES:
+            warn("unknown_node_type", f"Node {node.get('id') or '(unnamed)'} has an unknown type.")
+    for node_id in sorted({item for item in node_ids if item and node_ids.count(item) > 1}):
+        warn("duplicate_node_id", f"Node id {node_id} is used more than once.")
+    for edge in edges:
+        if not edge.get("id"):
+            warn("missing_edge_id", "A topology edge is missing an id.")
+    for edge_id in sorted({item for item in edge_ids if item and edge_ids.count(item) > 1}):
+        warn("duplicate_edge_id", f"Edge id {edge_id} is used more than once.")
+
     if not roles["executive"]:
         warn("missing_executive", "No Executive hat node controls final approval.")
     if not roles["worker"]:
@@ -119,16 +140,22 @@ def validate_topology(topology: dict[str, Any], hats: dict[str, dict[str, Any]])
         if not has_approval:
             warn("missing_final_approval", "Final Output has no approval edge from Executive.")
 
-    if roles["worker"] and roles["critic"] and not edge_path_exists(
-        topology, roles["worker"], roles["critic"], {"review"}
+    if (
+        roles["worker"]
+        and roles["critic"]
+        and not edge_path_exists(topology, roles["worker"], roles["critic"], {"review"})
     ):
         warn("missing_critic_path", "Worker output does not pass through a Critic review path.")
-    if roles["worker"] and roles["verifier"] and not edge_path_exists(
-        topology, roles["worker"], roles["verifier"], {"review"}
+    if (
+        roles["worker"]
+        and roles["verifier"]
+        and not edge_path_exists(topology, roles["worker"], roles["verifier"], {"review"})
     ):
         warn("missing_verifier_path", "Worker output does not pass through a Verifier review path.")
-    if roles["verifier"] and roles["executive"] and not edge_path_exists(
-        topology, roles["verifier"], roles["executive"], {"approval"}
+    if (
+        roles["verifier"]
+        and roles["executive"]
+        and not edge_path_exists(topology, roles["verifier"], roles["executive"], {"approval"})
     ):
         warn("missing_verifier_approval", "Verifier has no approval path back to Executive.")
 
@@ -146,3 +173,8 @@ def validate_topology(topology: dict[str, Any], hats: dict[str, dict[str, Any]])
             if source_node and source_node is not roles["memory"]:
                 warn("uncurated_memory_write", "Memory Store receives state writes from a non-curator node.")
     return warnings
+
+
+def blocking_topology_errors(topology: dict[str, Any], hats: dict[str, dict[str, Any]]) -> list[dict[str, str]]:
+    warnings = validate_topology(topology, hats)
+    return [item for item in warnings if item["code"] in BLOCKING_VALIDATION_CODES]

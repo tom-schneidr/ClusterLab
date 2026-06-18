@@ -1,11 +1,8 @@
 # ClusterLab
 
-ClusterLab is an early local-first workbench for experimenting with cognitive agent clusters:
+ClusterLab is a local-first workbench for experimenting with cognitive agent clusters:
 small teams of specialized "hats" that plan, work, critique, verify, and preserve useful
 memory around a task.
-
-The project is intentionally young, but the foundation is designed to be readable,
-testable, and easy to extend.
 
 ## Current Capabilities
 
@@ -18,9 +15,8 @@ testable, and easy to extend.
 
 ## Project Status
 
-ClusterLab is an early prototype. It is not trying to be production SaaS yet; it is a local
-research and design tool for exploring whether multi-role agent workflows can be made easier
-to inspect and iterate on.
+ClusterLab is a productizing prototype: useful as a local research and design tool, with
+the codebase kept intentionally small and inspectable.
 
 ## Quickstart
 
@@ -120,19 +116,12 @@ python -m ruff format .
 
 ## Architecture
 
-The architecture note lives at `docs/architecture.html`.
+Human-readable project docs:
 
-At a high level:
-
-- `app.py` exposes the ASGI app.
-- `clusterlab/app_factory.py` builds the FastAPI app, static mount, API router, and SQLite store.
-- `clusterlab/api/` owns HTTP routes and request schemas.
-- `clusterlab/engine.py` owns cluster orchestration.
-- `clusterlab/blackboard.py` owns shared run state and deltas.
-- `clusterlab/topology.py` owns graph validation and traversal.
-- `clusterlab/storage.py` owns SQLite persistence.
-- `clusterlab/llm.py` owns the OpenAI-compatible provider boundary.
-- `static/` contains the build-free browser client.
+- `docs/architecture.html`
+- `docs/development.html`
+- `docs/demo.html`
+- `docs/roadmap.html`
 
 ## Roadmap
 

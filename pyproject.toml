@@ -26,8 +26,11 @@ dev = [
 [project.scripts]
 clusterlab = "clusterlab.cli:main"
 
+[tool.setuptools.packages.find]
+include = ["clusterlab*"]
+exclude = ["tests*"]
+
 [tool.setuptools]
-packages = ["clusterlab", "clusterlab.api"]
 py-modules = ["app"]
 
 [tool.pytest.ini_options]

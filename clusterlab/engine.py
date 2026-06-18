@@ -91,6 +91,7 @@ def run_cluster(
             task=task,
             blackboard=blackboard,
         )
+    store.mark_run_running(run["id"])
     seq = len(store.list_events(run["id"]))
     if seq == 0:
         store.append_event(
@@ -101,10 +102,7 @@ def run_cluster(
             blackboard_after=blackboard,
             metadata={
                 "validation": validation,
-                "execution_plan": [
-                    {"stage": stage["key"], "node_id": stage["node"]["id"]}
-                    for stage in stage_plan
-                ],
+                "execution_plan": [{"stage": stage["key"], "node_id": stage["node"]["id"]} for stage in stage_plan],
             },
         )
         seq += 1
@@ -148,9 +146,7 @@ def run_cluster(
                 f"{display_name(node, hat)} produced output but is not allowed to write blackboard."
             )
         if result.error:
-            after.setdefault("notes", []).append(
-                f"{display_name(node, hat)} LLM call failed: {result.error}"
-            )
+            after.setdefault("notes", []).append(f"{display_name(node, hat)} LLM call failed: {result.error}")
 
         metadata = {
             "step_index": step_index,
@@ -158,8 +154,7 @@ def run_cluster(
             "node_id": node["id"],
             "node_type": node.get("type") or "hat",
             "edge_context": edge_context,
-            "usage": result.usage
-            or {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+            "usage": result.usage or {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
             "estimated_cost_usd": result.cost_usd,
             "provider_status": result.provider_status,
             "llm_error": result.error,
@@ -183,11 +178,16 @@ def run_cluster(
     final_before = copy.deepcopy(blackboard)
     final_result = compose_final_result(task, blackboard, stage_outputs)
     blackboard["final_answer"] = final_result
+    final_status = "completed" if final_result else "failed"
+    final_output = final_result or (
+        "Cluster did not produce an executable final answer. "
+        "Check the run trace for missing hat nodes, broken graph paths, or live LLM errors."
+    )
     store.append_event(
         run_id=run["id"],
         seq=seq,
         event_type="final_result",
-        output=final_result,
+        output=final_output,
         blackboard_before=final_before,
         blackboard_after=blackboard,
         metadata={
@@ -196,9 +196,7 @@ def run_cluster(
             "validation": validation,
         },
     )
-    store.update_run(
-        run["id"], status="completed", blackboard=blackboard, final_result=final_result
-    )
+    store.update_run(run["id"], status=final_status, blackboard=blackboard, final_result=final_output)
     completed = store.get_run(run["id"]) or run
     completed["events"] = store.list_events(run["id"])
     return completed
@@ -223,35 +221,34 @@ def build_execution_plan(
 
     add_stage(plan, "executive_orientation", roles["executive"])
     add_stage(plan, "context", roles["context"])
-    if roles["planner"] and edge_path_exists(
-        topology, roles["executive"], roles["planner"], {"delegation", "context"}
-    ):
+    if roles["planner"] and edge_path_exists(topology, roles["executive"], roles["planner"], {"delegation", "context"}):
         add_stage(plan, "planning", roles["planner"])
     elif roles["planner"]:
         add_stage(plan, "planning", roles["planner"])
 
-    if roles["worker"] and roles["planner"] and edge_path_exists(
-        topology, roles["planner"], roles["worker"], {"delegation", "context"}
+    if (
+        roles["worker"]
+        and roles["planner"]
+        and edge_path_exists(topology, roles["planner"], roles["worker"], {"delegation", "context"})
     ):
         add_stage(plan, "work", roles["worker"])
     elif roles["worker"]:
         add_stage(plan, "work", roles["worker"])
 
-    if roles["critic"] and roles["worker"] and edge_path_exists(
-        topology, roles["worker"], roles["critic"], {"review"}
-    ):
+    if roles["critic"] and roles["worker"] and edge_path_exists(topology, roles["worker"], roles["critic"], {"review"}):
         add_stage(plan, "critique", roles["critic"])
         if edge_path_exists(topology, roles["critic"], roles["worker"], {"escalation"}):
             add_stage(plan, "revision", roles["worker"])
 
-    if roles["verifier"] and roles["worker"] and edge_path_exists(
-        topology, roles["worker"], roles["verifier"], {"review"}
+    if (
+        roles["verifier"]
+        and roles["worker"]
+        and edge_path_exists(topology, roles["worker"], roles["verifier"], {"review"})
     ):
         add_stage(plan, "verification", roles["verifier"])
 
     if roles["executive"] and (
-        not roles["verifier"]
-        or edge_path_exists(topology, roles["verifier"], roles["executive"], {"approval"})
+        not roles["verifier"] or edge_path_exists(topology, roles["verifier"], roles["executive"], {"approval"})
     ):
         add_stage(plan, "executive_approval", roles["executive"])
 
@@ -259,10 +256,7 @@ def build_execution_plan(
         add_stage(plan, "memory", roles["memory"])
 
     if not plan:
-        plan = [
-            {"key": "hat_turn", "node": node}
-            for node in topological_hat_order(topology, hats)
-        ]
+        plan = [{"key": "hat_turn", "node": node} for node in topological_hat_order(topology, hats)]
     return plan[:max_turns]
 
 
@@ -275,11 +269,7 @@ def topological_hat_order(
     topology: dict[str, Any],
     hats: dict[str, dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    nodes = [
-        node
-        for node in topology.get("nodes", [])
-        if node.get("type") == "hat" and node.get("hat_id") in hats
-    ]
+    nodes = [node for node in topology.get("nodes", []) if node.get("type") == "hat" and node.get("hat_id") in hats]
     node_ids = {node["id"] for node in nodes}
     indegree = {node["id"]: 0 for node in nodes}
     outgoing: dict[str, list[str]] = {node["id"]: [] for node in nodes}
@@ -317,16 +307,8 @@ def build_prompt(
     step_index: int,
     edge_context: dict[str, Any],
 ) -> str:
-    compact_stage_outputs = {
-        key: value[:650]
-        for key, value in list(stage_outputs.items())[-5:]
-        if value
-    }
-    compact_upstream = {
-        key: value[:650]
-        for key, value in upstream_outputs.items()
-        if value
-    }
+    compact_stage_outputs = {key: value[:650] for key, value in list(stage_outputs.items())[-5:] if value}
+    compact_upstream = {key: value[:650] for key, value in upstream_outputs.items() if value}
     node_controls = {
         "node_id": node.get("id"),
         "node_type": node.get("type"),
@@ -385,16 +367,8 @@ def describe_node_edges(node: dict[str, Any], topology: dict[str, Any]) -> dict[
         }
 
     return {
-        "incoming": [
-            describe(edge)
-            for edge in topology.get("edges", [])
-            if edge.get("target") == node_id
-        ],
-        "outgoing": [
-            describe(edge)
-            for edge in topology.get("edges", [])
-            if edge.get("source") == node_id
-        ],
+        "incoming": [describe(edge) for edge in topology.get("edges", []) if edge.get("target") == node_id],
+        "outgoing": [describe(edge) for edge in topology.get("edges", []) if edge.get("source") == node_id],
     }
 
 
@@ -440,9 +414,6 @@ def compose_final_result(
     blackboard: dict[str, Any],
     stage_outputs: dict[str, str],
 ) -> str:
-    deterministic = deterministic_final_result(task)
-    if deterministic:
-        return deterministic
     approved = stage_outputs.get("executive_approval")
     if approved:
         return approved
@@ -452,34 +423,8 @@ def compose_final_result(
     work = stage_outputs.get("work")
     if work:
         return work
-    return (
-        f"Cluster did not produce an executable final answer for task: {task}\n\n"
-        "Check the run trace for missing hat nodes, broken graph paths, or live LLM errors."
-    )
-
-
-def deterministic_final_result(task: str) -> str:
-    text = task.lower()
-    required_terms = ["apples", "oranges", "mixed", "label", "wrong"]
-    if not all(term in text for term in required_terms):
-        return ""
-    return (
-        "Draw one fruit from the box labeled \"Mixed\".\n\n"
-        "Because every label is wrong, the box labeled \"Mixed\" cannot be mixed. "
-        "It must contain only apples or only oranges, so one draw identifies that box exactly.\n\n"
-        "If you draw an apple:\n"
-        "- Box labeled \"Mixed\" -> Apples.\n"
-        "- Box labeled \"Oranges\" -> Mixed, because it cannot be Oranges and Apples is already assigned.\n"
-        "- Box labeled \"Apples\" -> Oranges.\n\n"
-        "If you draw an orange:\n"
-        "- Box labeled \"Mixed\" -> Oranges.\n"
-        "- Box labeled \"Apples\" -> Mixed, because it cannot be Apples and Oranges is already assigned.\n"
-        "- Box labeled \"Oranges\" -> Apples.\n\n"
-        "This is minimal because a single draw from the mislabeled \"Mixed\" box turns an ambiguous "
-        "three-box relabeling problem into one known pure box plus two forced remaining assignments."
-    )
+    return ""
 
 
 def display_name(node: dict[str, Any], hat: dict[str, Any]) -> str:
     return str(node.get("name") or hat.get("name") or node.get("id") or hat.get("id") or "Hat")
-

@@ -38,11 +38,7 @@ def test_typed_graph_execution_runs_review_revision_and_approval(tmp_path, monke
         task="Answer a broad reasoning prompt well.",
     )
 
-    stages = [
-        event["metadata"].get("stage")
-        for event in run["events"]
-        if event["metadata"].get("stage")
-    ]
+    stages = [event["metadata"].get("stage") for event in run["events"] if event["metadata"].get("stage")]
     assert stages == [
         "executive_orientation",
         "context",
@@ -60,24 +56,17 @@ def test_typed_graph_execution_runs_review_revision_and_approval(tmp_path, monke
 
 def test_validation_warns_when_final_output_has_no_approval_edge() -> None:
     topology = copy.deepcopy(DEFAULT_TOPOLOGY)
-    topology["edges"] = [
-        edge
-        for edge in topology["edges"]
-        if edge["id"] != "e_executive_final"
-    ]
+    topology["edges"] = [edge for edge in topology["edges"] if edge["id"] != "e_executive_final"]
 
     messages = [warning["message"] for warning in engine.validate_topology(topology, hats_by_id())]
     assert "Final Output has no approval edge from Executive." in messages
 
 
-def test_deterministic_wrong_label_boxes_result_preserves_all_label_constraints() -> None:
-    result = engine.deterministic_final_result(
-        "Three boxes are labeled Apples, Oranges, and Mixed. Every label is wrong."
+def test_compose_final_result_does_not_use_puzzle_shortcuts() -> None:
+    result = engine.compose_final_result(
+        "Three boxes are labeled Apples, Oranges, and Mixed. Every label is wrong.",
+        {},
+        {},
     )
 
-    assert 'Box labeled "Mixed" -> Apples.' in result
-    assert 'Box labeled "Oranges" -> Mixed' in result
-    assert 'Box labeled "Apples" -> Oranges.' in result
-    assert 'Box labeled "Mixed" -> Oranges.' in result
-    assert 'Box labeled "Apples" -> Mixed' in result
-    assert 'Box labeled "Oranges" -> Apples.' in result
+    assert result == ""

@@ -9,6 +9,51 @@ from typing import Any
 
 from clusterlab.defaults import DEFAULT_HATS, DEFAULT_TOPOLOGY
 
+MIGRATIONS: tuple[tuple[str, str], ...] = (
+    (
+        "0001_initial_schema",
+        """
+        create table if not exists hats (
+            id text primary key,
+            data_json text not null,
+            updated_at text not null
+        );
+        create table if not exists topologies (
+            id text primary key,
+            name text not null,
+            data_json text not null,
+            updated_at text not null
+        );
+        create table if not exists runs (
+            id text primary key,
+            topology_id text not null,
+            status text not null,
+            task text not null,
+            blackboard_json text not null,
+            final_result text not null,
+            created_at text not null,
+            updated_at text not null
+        );
+        create table if not exists run_events (
+            id integer primary key autoincrement,
+            run_id text not null,
+            seq integer not null,
+            event_type text not null,
+            hat_id text,
+            hat_name text,
+            prompt text not null default '',
+            output text not null default '',
+            blackboard_before_json text not null default '{}',
+            blackboard_after_json text not null default '{}',
+            metadata_json text not null default '{}',
+            created_at text not null
+        );
+        create index if not exists idx_runs_created_at on runs(created_at desc);
+        create index if not exists idx_run_events_run_seq on run_events(run_id, seq);
+        """,
+    ),
+)
+
 
 def now_iso() -> str:
     return datetime.now(UTC).isoformat()
@@ -26,45 +71,7 @@ class ClusterStore:
 
     def initialize(self) -> None:
         with self.connect() as conn:
-            conn.executescript(
-                """
-                create table if not exists hats (
-                    id text primary key,
-                    data_json text not null,
-                    updated_at text not null
-                );
-                create table if not exists topologies (
-                    id text primary key,
-                    name text not null,
-                    data_json text not null,
-                    updated_at text not null
-                );
-                create table if not exists runs (
-                    id text primary key,
-                    topology_id text not null,
-                    status text not null,
-                    task text not null,
-                    blackboard_json text not null,
-                    final_result text not null,
-                    created_at text not null,
-                    updated_at text not null
-                );
-                create table if not exists run_events (
-                    id integer primary key autoincrement,
-                    run_id text not null,
-                    seq integer not null,
-                    event_type text not null,
-                    hat_id text,
-                    hat_name text,
-                    prompt text not null default '',
-                    output text not null default '',
-                    blackboard_before_json text not null default '{}',
-                    blackboard_after_json text not null default '{}',
-                    metadata_json text not null default '{}',
-                    created_at text not null
-                );
-                """
-            )
+            self._migrate(conn)
             for hat in DEFAULT_HATS:
                 self._save_hat_conn(conn, hat)
             default_row = conn.execute(
@@ -73,6 +80,25 @@ class ClusterStore:
             default_data = json.loads(default_row["data_json"]) if default_row else {}
             if default_data.get("schema_version") != DEFAULT_TOPOLOGY["schema_version"]:
                 self._save_topology_conn(conn, DEFAULT_TOPOLOGY)
+
+    def _migrate(self, conn: sqlite3.Connection) -> None:
+        conn.execute(
+            """
+            create table if not exists schema_migrations (
+                version text primary key,
+                applied_at text not null
+            )
+            """
+        )
+        applied = {row["version"] for row in conn.execute("select version from schema_migrations").fetchall()}
+        for version, sql in MIGRATIONS:
+            if version in applied:
+                continue
+            conn.executescript(sql)
+            conn.execute(
+                "insert into schema_migrations (version, applied_at) values (?, ?)",
+                (version, now_iso()),
+            )
 
     def list_hats(self) -> list[dict[str, Any]]:
         with self.connect() as conn:
@@ -109,9 +135,7 @@ class ClusterStore:
 
     def get_topology(self, topology_id: str) -> dict[str, Any] | None:
         with self.connect() as conn:
-            row = conn.execute(
-                "select data_json from topologies where id = ?", (topology_id,)
-            ).fetchone()
+            row = conn.execute("select data_json from topologies where id = ?", (topology_id,)).fetchone()
         return json.loads(row["data_json"]) if row else None
 
     def save_topology(self, data: dict[str, Any]) -> dict[str, Any]:
@@ -155,7 +179,7 @@ class ClusterStore:
         run = {
             "id": f"run_{uuid.uuid4().hex[:10]}",
             "topology_id": topology_id,
-            "status": "running",
+            "status": "queued",
             "task": task,
             "blackboard": blackboard,
             "final_result": "",
@@ -182,9 +206,14 @@ class ClusterStore:
             )
         return run
 
-    def update_run(
-        self, run_id: str, *, status: str, blackboard: dict[str, Any], final_result: str
-    ) -> None:
+    def mark_run_running(self, run_id: str) -> None:
+        with self.connect() as conn:
+            conn.execute(
+                "update runs set status = 'running', updated_at = ? where id = ? and status = 'queued'",
+                (now_iso(), run_id),
+            )
+
+    def update_run(self, run_id: str, *, status: str, blackboard: dict[str, Any], final_result: str) -> None:
         with self.connect() as conn:
             conn.execute(
                 """
@@ -218,9 +247,7 @@ class ClusterStore:
 
     def list_runs(self, limit: int = 20) -> list[dict[str, Any]]:
         with self.connect() as conn:
-            rows = conn.execute(
-                "select * from runs order by created_at desc limit ?", (limit,)
-            ).fetchall()
+            rows = conn.execute("select * from runs order by created_at desc limit ?", (limit,)).fetchall()
         return [run_from_row(row) for row in rows]
 
     def append_event(
@@ -276,9 +303,7 @@ class ClusterStore:
 
     def list_events(self, run_id: str) -> list[dict[str, Any]]:
         with self.connect() as conn:
-            rows = conn.execute(
-                "select * from run_events where run_id = ? order by seq asc", (run_id,)
-            ).fetchall()
+            rows = conn.execute("select * from run_events where run_id = ? order by seq asc", (run_id,)).fetchall()
         return [event_from_row(row) for row in rows]
 
 

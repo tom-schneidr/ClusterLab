@@ -54,14 +54,10 @@ def apply_blackboard_update(
         return
     if stage_key == "executive_orientation":
         blackboard.setdefault("decisions", []).append(output)
-        blackboard.setdefault("success_criteria", []).append(
-            "Executive established success criteria for this run."
-        )
+        blackboard.setdefault("success_criteria", []).append("Executive established success criteria for this run.")
     elif stage_key == "context":
         blackboard.setdefault("situation", []).append(output)
-        blackboard.setdefault("assumptions", []).append(
-            "Context Keeper updated the situation model."
-        )
+        blackboard.setdefault("assumptions", []).append("Context Keeper updated the situation model.")
     elif stage_key == "planning":
         blackboard.setdefault("plan", []).append(output)
         blackboard.setdefault("task_packets", []).append(output)

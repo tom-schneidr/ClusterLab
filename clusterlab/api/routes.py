@@ -1,19 +1,20 @@
 from __future__ import annotations
 
-import os
 import threading
 import traceback
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
-from clusterlab.api.schemas import HatDefinitionIn, RunStartIn, TopologyIn
+from clusterlab.api.schemas import HatDefinitionIn, RunDetail, RunStartIn, RunSummary, TopologyIn
 from clusterlab.blackboard import initial_blackboard
+from clusterlab.config import Settings
 from clusterlab.engine import run_cluster
 from clusterlab.storage import ClusterStore
+from clusterlab.topology import blocking_topology_errors, validate_topology
 
 
-def create_api_router(store: ClusterStore) -> APIRouter:
+def create_api_router(store: ClusterStore, *, settings: Settings) -> APIRouter:
     router = APIRouter(prefix="/api")
 
     @router.get("/bootstrap")
@@ -23,11 +24,11 @@ def create_api_router(store: ClusterStore) -> APIRouter:
             "topologies": store.list_topologies(),
             "runs": store.list_runs(limit=20),
             "llm": {
-                "base_url": os.getenv("FREEROUTER_BASE_URL")
-                or "http://localhost:8000/v1",
-                "default_model": os.getenv("FREEROUTER_MODEL")
-                or "auto",
+                "base_url": settings.freerouter_base_url,
+                "default_model": settings.freerouter_model,
+                "timeout_seconds": settings.llm_timeout_seconds,
             },
+            "app": {"version": settings.app_version},
         }
 
     @router.get("/hats")
@@ -55,24 +56,24 @@ def create_api_router(store: ClusterStore) -> APIRouter:
 
     @router.post("/topologies")
     def create_topology(body: TopologyIn) -> dict[str, Any]:
-        return store.save_topology(body.model_dump())
+        return save_validated_topology(store, body.model_dump())
 
     @router.put("/topologies/{topology_id}")
     def update_topology(topology_id: str, body: TopologyIn) -> dict[str, Any]:
         data = body.model_dump()
         data["id"] = topology_id
-        return store.save_topology(data)
+        return save_validated_topology(store, data)
 
     @router.delete("/topologies/{topology_id}")
     def delete_topology(topology_id: str) -> dict[str, str]:
         store.delete_topology(topology_id)
         return {"status": "ok"}
 
-    @router.post("/runs/start")
+    @router.post("/runs/start", response_model=RunDetail)
     def start_run(body: RunStartIn) -> dict[str, Any]:
         topology = store.get_topology(body.topology_id)
         if not topology:
-            raise HTTPException(404, detail="topology not found")
+            raise not_found("topology", body.topology_id)
         hats = {hat["id"]: hat for hat in store.list_hats()}
         blackboard = initial_blackboard(body.task)
         run = store.create_run(
@@ -83,6 +84,7 @@ def create_api_router(store: ClusterStore) -> APIRouter:
 
         def worker() -> None:
             try:
+                store.mark_run_running(run["id"])
                 run_cluster(
                     store=store,
                     topology=topology,
@@ -98,15 +100,15 @@ def create_api_router(store: ClusterStore) -> APIRouter:
         threading.Thread(target=worker, daemon=True).start()
         return {**run, "events": []}
 
-    @router.get("/runs")
+    @router.get("/runs", response_model=list[RunSummary])
     def list_runs() -> list[dict[str, Any]]:
         return store.list_runs(limit=50)
 
-    @router.get("/runs/{run_id}")
+    @router.get("/runs/{run_id}", response_model=RunDetail)
     def get_run(run_id: str) -> dict[str, Any]:
         run = store.get_run(run_id)
         if not run:
-            raise HTTPException(404, detail="run not found")
+            raise not_found("run", run_id)
         run["events"] = store.list_events(run_id)
         return run
 
@@ -116,3 +118,32 @@ def create_api_router(store: ClusterStore) -> APIRouter:
         return {"status": "stopped"}
 
     return router
+
+
+def save_validated_topology(store: ClusterStore, data: dict[str, Any]) -> dict[str, Any]:
+    hats = {hat["id"]: hat for hat in store.list_hats()}
+    errors = blocking_topology_errors(data, hats)
+    if errors:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "invalid_topology",
+                "message": "Topology has blocking validation errors.",
+                "errors": errors,
+            },
+        )
+    saved = store.save_topology(data)
+    saved["validation"] = validate_topology(saved, hats)
+    return saved
+
+
+def not_found(resource: str, identifier: str) -> HTTPException:
+    return HTTPException(
+        status_code=404,
+        detail={
+            "code": "not_found",
+            "message": f"{resource} not found",
+            "resource": resource,
+            "id": identifier,
+        },
+    )

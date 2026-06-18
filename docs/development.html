@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ClusterLab Development</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 40px auto; line-height: 1.6; padding: 0 20px; }
+    code, pre { background: #f4f4f5; border-radius: 6px; }
+    code { padding: 2px 5px; }
+    pre { padding: 14px; overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <h1>ClusterLab Development</h1>
+  <p>ClusterLab is intentionally small: FastAPI, SQLite, Pydantic, and build-free browser JavaScript.</p>
+  <h2>Local setup</h2>
+  <pre><code>python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e ".[dev]"
+Copy-Item .env.example .env
+clusterlab</code></pre>
+  <h2>Quality checks</h2>
+  <pre><code>python -m ruff check .
+python -m ruff format --check .
+python -m pytest</code></pre>
+  <h2>Repo rules</h2>
+  <ul>
+    <li>Use <code>.html</code> files for docs intended to be read by users.</li>
+    <li>Keep runtime data, local databases, research notes, virtual environments, and generated package metadata untracked.</li>
+    <li>Prefer typed API boundaries and small modules over broad dictionaries at new extension points.</li>
+  </ul>
+</body>
+</html>
