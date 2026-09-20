@@ -21,6 +21,20 @@ def test_initialize_applies_migrations_and_indexes(tmp_path) -> None:
     assert store.list_topologies()
 
 
+def test_initialize_preserves_user_edits_to_seeded_hats(tmp_path) -> None:
+    store = ClusterStore(tmp_path / "clusterlab.db")
+    store.initialize()
+
+    worker = next(hat for hat in store.list_hats() if hat["id"] == "worker")
+    worker["role"] = "Custom local worker role"
+    store.save_hat(worker)
+
+    store.initialize()
+
+    persisted = next(hat for hat in store.list_hats() if hat["id"] == "worker")
+    assert persisted["role"] == "Custom local worker role"
+
+
 def test_run_lifecycle_starts_queued_then_running(tmp_path) -> None:
     store = ClusterStore(tmp_path / "clusterlab.db")
     store.initialize()
@@ -30,3 +44,18 @@ def test_run_lifecycle_starts_queued_then_running(tmp_path) -> None:
 
     store.mark_run_running(run["id"])
     assert store.get_run(run["id"])["status"] == "running"
+
+
+def test_mark_run_failed_persists_diagnostic_without_overwriting_result(tmp_path) -> None:
+    store = ClusterStore(tmp_path / "clusterlab.db")
+    store.initialize()
+    run = store.create_run(topology_id="topology", task="task", blackboard={"goal": "task"})
+
+    store.mark_run_failed(run["id"], error="provider crashed")
+    failed = store.get_run(run["id"])
+
+    assert failed["status"] == "failed"
+    assert failed["final_result"] == "provider crashed"
+
+    store.mark_run_failed(run["id"], error="new error")
+    assert store.get_run(run["id"])["final_result"] == "provider crashed"

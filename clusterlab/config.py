@@ -11,6 +11,7 @@ DEFAULT_DATA_DIR = "data"
 DEFAULT_FREEROUTER_BASE_URL = "http://localhost:8000/v1"
 DEFAULT_FREEROUTER_API_KEY = "local"
 DEFAULT_FREEROUTER_MODEL = "auto"
+DEFAULT_LLM_MODE = "live"
 DEFAULT_LLM_TIMEOUT_SECONDS = 60.0
 
 
@@ -24,6 +25,7 @@ class Settings:
     freerouter_base_url: str
     freerouter_api_key: str
     freerouter_model: str
+    llm_mode: str
     llm_timeout_seconds: float
 
 
@@ -44,6 +46,7 @@ def load_settings(*, root: Path | None = None) -> Settings:
         freerouter_base_url=(os.getenv("FREEROUTER_BASE_URL") or DEFAULT_FREEROUTER_BASE_URL).rstrip("/"),
         freerouter_api_key=os.getenv("FREEROUTER_API_KEY") or DEFAULT_FREEROUTER_API_KEY,
         freerouter_model=os.getenv("FREEROUTER_MODEL") or DEFAULT_FREEROUTER_MODEL,
+        llm_mode=(os.getenv("CLUSTERLAB_LLM_MODE") or DEFAULT_LLM_MODE).strip().lower(),
         llm_timeout_seconds=float(os.getenv("CLUSTERLAB_LLM_TIMEOUT_SECONDS") or DEFAULT_LLM_TIMEOUT_SECONDS),
     )
 

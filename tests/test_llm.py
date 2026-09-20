@@ -58,3 +58,18 @@ def test_call_llm_handles_http_error(monkeypatch) -> None:
 
     assert result.provider_status == "error"
     assert result.content == ""
+
+
+def test_offline_demo_does_not_call_provider(monkeypatch) -> None:
+    monkeypatch.setenv("CLUSTERLAB_LLM_MODE", "offline-demo")
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("offline demo must not call the provider")
+
+    monkeypatch.setattr(llm.urllib.request, "urlopen", fail_if_called)
+
+    result = llm.call_llm([{"role": "user", "content": "Current stage: 8 / executive_approval"}])
+
+    assert result.provider_status == "offline-demo"
+    assert result.content.startswith("Offline demo result:")
+    assert result.usage["total_tokens"] == 0

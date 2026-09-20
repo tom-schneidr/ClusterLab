@@ -20,7 +20,7 @@ import {
   startRunPolling,
   stopRunPolling,
   syncCanvasSize,
-} from './js/graph/index.js'
+} from './js/graph/index.js?v=20260920-offline-demo-poll2'
 import { nodeHeight } from './js/graph/ports.js'
 import { escapeHtml, pretty, qs, short } from './js/dom.js'
 import {
@@ -63,7 +63,9 @@ async function bootstrap() {
   state.topologies = data.topologies.filter((topology) => topology.schema_version === 2)
   state.activeTopology = JSON.parse(JSON.stringify(state.topologies[0] || blankTopology()))
   state.selectedHatId = state.hats[0]?.id || null
-  qs('llmRoute').textContent = `${data.llm.default_model} @ ${data.llm.base_url}`
+  qs('llmRoute').textContent = data.llm.mode === 'offline-demo'
+    ? 'offline-demo · no provider calls'
+    : `${data.llm.default_model} @ ${data.llm.base_url}`
   renderAll()
 }
 
@@ -583,7 +585,7 @@ async function runCluster() {
     state.currentRun = await api('/api/runs/start', { method: 'POST', body: JSON.stringify(body) })
     state.selectedEventSeq = state.currentRun.events?.[0]?.seq ?? null
     setExecutionFromRun(state.currentRun)
-    if (state.currentRun.status === 'running') {
+    if (['queued', 'running'].includes(state.currentRun.status)) {
       startRunPolling(state.currentRun.id, (run) => {
         state.currentRun = run
         setExecutionFromRun(run)

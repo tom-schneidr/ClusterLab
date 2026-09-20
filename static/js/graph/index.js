@@ -13,7 +13,7 @@ export {
   startRunPolling,
   stopRunPolling,
   updateRunStatusStrip,
-} from './execution.js'
+} from './execution.js?v=20260920-offline-demo-poll2'
 export { dropNodePosition } from './interaction.js'
 export { graphMaxX, graphMaxY, resetViewport, syncCanvasSize } from './viewport.js'
 

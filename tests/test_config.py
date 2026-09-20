@@ -15,6 +15,7 @@ def test_settings_defaults(monkeypatch, tmp_path) -> None:
         "FREEROUTER_BASE_URL",
         "FREEROUTER_API_KEY",
         "FREEROUTER_MODEL",
+        "CLUSTERLAB_LLM_MODE",
     ]:
         monkeypatch.delenv(key, raising=False)
 
@@ -24,6 +25,7 @@ def test_settings_defaults(monkeypatch, tmp_path) -> None:
     assert settings.port == 8765
     assert settings.data_dir == tmp_path / "data"
     assert settings.freerouter_base_url == "http://localhost:8000/v1"
+    assert settings.llm_mode == "live"
     assert "http://127.0.0.1:8765" in settings.cors_origins
 
 
@@ -36,6 +38,7 @@ def test_settings_env_overrides(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("FREEROUTER_BASE_URL", "http://llm.test/v1/")
     monkeypatch.setenv("FREEROUTER_API_KEY", "secret")
     monkeypatch.setenv("FREEROUTER_MODEL", "test-model")
+    monkeypatch.setenv("CLUSTERLAB_LLM_MODE", " OFFLINE-DEMO ")
 
     settings = load_settings(root=Path("unused"))
 
@@ -46,4 +49,5 @@ def test_settings_env_overrides(monkeypatch, tmp_path) -> None:
     assert settings.llm_timeout_seconds == 12.5
     assert settings.freerouter_base_url == "http://llm.test/v1"
     assert settings.freerouter_api_key == "secret"
+    assert settings.llm_mode == "offline-demo"
     assert settings.freerouter_model == "test-model"

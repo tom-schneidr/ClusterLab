@@ -99,6 +99,12 @@ export function updateRunStatusStrip(run) {
     return
   }
 
+  if (status === 'queued') {
+    el.innerHTML = '<span class="run-status-text">Queued · waiting for the worker</span>'
+    el.classList.add('visible')
+    return
+  }
+
   if (status === 'completed') {
     el.innerHTML = `
       <span class="run-status-text">Completed · ${run.events?.length || 0} events</span>
@@ -134,7 +140,7 @@ export function startRunPolling(runId, onUpdate) {
     try {
       const run = await api(`/api/runs/${encodeURIComponent(runId)}`)
       onUpdate(run)
-      if (run.status !== 'running') stopRunPolling()
+      if (['completed', 'failed', 'stopped'].includes(run.status)) stopRunPolling()
     } catch (err) {
       console.error(err)
       stopRunPolling()

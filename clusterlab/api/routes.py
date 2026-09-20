@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import logging
 import threading
-import traceback
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -12,6 +12,8 @@ from clusterlab.config import Settings
 from clusterlab.engine import run_cluster
 from clusterlab.storage import ClusterStore
 from clusterlab.topology import blocking_topology_errors, validate_topology
+
+logger = logging.getLogger(__name__)
 
 
 def create_api_router(store: ClusterStore, *, settings: Settings) -> APIRouter:
@@ -26,6 +28,7 @@ def create_api_router(store: ClusterStore, *, settings: Settings) -> APIRouter:
             "llm": {
                 "base_url": settings.freerouter_base_url,
                 "default_model": settings.freerouter_model,
+                "mode": settings.llm_mode,
                 "timeout_seconds": settings.llm_timeout_seconds,
             },
             "app": {"version": settings.app_version},
@@ -93,9 +96,9 @@ def create_api_router(store: ClusterStore, *, settings: Settings) -> APIRouter:
                     max_turns=body.max_turns,
                     run_id=run["id"],
                 )
-            except Exception:
-                traceback.print_exc()
-                store.mark_run_failed(run["id"])
+            except Exception as exc:
+                logger.exception("Cluster run worker crashed for %s", run["id"])
+                store.mark_run_failed(run["id"], error=f"Run worker crashed: {exc}")
 
         threading.Thread(target=worker, daemon=True).start()
         return {**run, "events": []}
@@ -114,6 +117,8 @@ def create_api_router(store: ClusterStore, *, settings: Settings) -> APIRouter:
 
     @router.post("/runs/{run_id}/stop")
     def stop_run(run_id: str) -> dict[str, str]:
+        if not store.get_run(run_id):
+            raise not_found("run", run_id)
         store.mark_run_stopped(run_id)
         return {"status": "stopped"}
 

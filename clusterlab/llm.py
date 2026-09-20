@@ -38,6 +38,10 @@ def call_llm(
     temperature: float = 0.2,
     max_tokens: int = 900,
 ) -> LlmResult:
+    settings = load_settings()
+    if settings.llm_mode in {"offline", "offline-demo", "demo"}:
+        return offline_demo_result(messages)
+
     payload = {
         "model": model or default_model(),
         "messages": messages,
@@ -56,7 +60,7 @@ def call_llm(
     )
     started = time.perf_counter()
     try:
-        with urllib.request.urlopen(req, timeout=load_settings().llm_timeout_seconds) as resp:
+        with urllib.request.urlopen(req, timeout=settings.llm_timeout_seconds) as resp:
             data = json.loads(resp.read().decode("utf-8"))
         usage = data.get("usage") or {}
         choices = data.get("choices") or []
@@ -89,3 +93,34 @@ def call_llm(
             provider_status="error",
             error=str(exc),
         )
+
+
+def offline_demo_result(messages: list[dict[str, str]]) -> LlmResult:
+    """Return a deterministic, clearly labelled response for local demonstrations."""
+    prompt = messages[-1].get("content", "") if messages else ""
+    stage = "hat_turn"
+    for line in prompt.splitlines():
+        if line.startswith("Current stage:"):
+            stage = line.split("/", 1)[-1].strip() or stage
+            break
+
+    outputs = {
+        "executive_orientation": (
+            "Offline demo: define the goal, success criteria, and stopping conditions before delegating work."
+        ),
+        "context": "Offline demo: record facts, constraints, assumptions, and open questions for the cluster.",
+        "planning": "Offline demo: create a concrete task packet with dependencies and acceptance checks.",
+        "work": "Offline demo: produce a direct work product with a concise evidence note.",
+        "critique": "Offline demo: identify a likely weakness, missing case, or unsupported assumption.",
+        "revision": "Offline demo: revise the work product to address the recorded critique.",
+        "verification": "Offline demo: verify the revised result against the goal and mark remaining proof gaps.",
+        "executive_approval": "Offline demo result: the reviewed work product is approved for local inspection.",
+        "memory": "Offline demo: preserve only the durable procedure and its provenance.",
+    }
+    content = outputs.get(stage, f"Offline demo output for {stage}.")
+    return LlmResult(
+        content=content,
+        usage={"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+        cost_usd=0.0,
+        provider_status="offline-demo",
+    )

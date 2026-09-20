@@ -31,5 +31,5 @@ def test_static_js_import_paths_exist() -> None:
     for source in (root / "static").rglob("*.js"):
         text = source.read_text(encoding="utf-8")
         for imported in re.findall(r"from '((?:\./|\.\./)[^']+)'", text):
-            target = (source.parent / imported).resolve()
+            target = (source.parent / imported.split("?", 1)[0].split("#", 1)[0]).resolve()
             assert target.exists(), f"{source.relative_to(root)} imports missing {imported}"

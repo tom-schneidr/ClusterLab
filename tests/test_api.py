@@ -16,6 +16,7 @@ def test_bootstrap_returns_seeded_local_state(tmp_path) -> None:
     assert data["hats"]
     assert data["topologies"]
     assert data["llm"]["base_url"]
+    assert data["llm"]["mode"] == "live"
 
 
 def test_missing_run_returns_404(tmp_path) -> None:
@@ -95,3 +96,13 @@ def test_invalid_topology_save_returns_structured_422(tmp_path) -> None:
     detail = response.json()["detail"]
     assert detail["code"] == "invalid_topology"
     assert detail["errors"][0]["code"] == "broken_edge"
+
+
+def test_stop_missing_run_returns_404(tmp_path) -> None:
+    app = create_app(data_dir=tmp_path)
+    client = TestClient(app)
+
+    response = client.post("/api/runs/not_a_run/stop")
+
+    assert response.status_code == 404
+    assert response.json()["detail"]["code"] == "not_found"

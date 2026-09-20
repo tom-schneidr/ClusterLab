@@ -33,6 +33,8 @@ htmlcov/
 
 # Project-specific
 research/
+.codex-pet-runs/
+.wheel-check/
 
 # OS
 .DS_Store

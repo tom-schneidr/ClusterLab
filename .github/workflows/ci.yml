@@ -8,6 +8,9 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.13"]
 
     steps:
       - name: Check out repository
@@ -16,7 +19,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: ${{ matrix.python-version }}
           cache: "pip"
 
       - name: Install dependencies
@@ -29,6 +32,22 @@ jobs:
 
       - name: Format check
         run: python -m ruff format --check .
+
+      - name: Dependency audit
+        run: python -m pip_audit
+
+      - name: Build package
+        run: python -m build --sdist --wheel
+
+      - name: Smoke-test built wheel
+        run: |
+          wheel_venv="${RUNNER_TEMP}/clusterlab-wheel"
+          python -m venv "$wheel_venv"
+          "$wheel_venv/bin/python" -m pip install --quiet dist/*.whl
+          cd "$RUNNER_TEMP"
+          CLUSTERLAB_LLM_MODE=offline-demo \
+            CLUSTERLAB_DATA_DIR=clusterlab-data \
+            "$wheel_venv/bin/python" -c "import sys; from pathlib import Path; from app import app; assert (Path(sys.prefix) / 'static' / 'index.html').is_file(); assert (Path('clusterlab-data') / 'clusterlab.db').is_file(); assert any(getattr(route, 'path', '') == '/static' for route in app.routes)"
 
       - name: Test
         run: python -m pytest

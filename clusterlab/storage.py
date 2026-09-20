@@ -5,9 +5,11 @@ import sqlite3
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeAlias
 
 from clusterlab.defaults import DEFAULT_HATS, DEFAULT_TOPOLOGY
+
+JsonObject: TypeAlias = dict[str, Any]
 
 MIGRATIONS: tuple[tuple[str, str], ...] = (
     (
@@ -73,7 +75,7 @@ class ClusterStore:
         with self.connect() as conn:
             self._migrate(conn)
             for hat in DEFAULT_HATS:
-                self._save_hat_conn(conn, hat)
+                self._seed_hat_conn(conn, hat)
             default_row = conn.execute(
                 "select data_json from topologies where id = ?", (DEFAULT_TOPOLOGY["id"],)
             ).fetchone()
@@ -100,19 +102,19 @@ class ClusterStore:
                 (version, now_iso()),
             )
 
-    def list_hats(self) -> list[dict[str, Any]]:
+    def list_hats(self) -> list[JsonObject]:
         with self.connect() as conn:
             rows = conn.execute("select data_json from hats order by id").fetchall()
         return [json.loads(row["data_json"]) for row in rows]
 
-    def save_hat(self, data: dict[str, Any]) -> dict[str, Any]:
+    def save_hat(self, data: JsonObject) -> JsonObject:
         if not data.get("id"):
             data["id"] = slug_id(data.get("name") or "hat")
         with self.connect() as conn:
             self._save_hat_conn(conn, data)
         return data
 
-    def _save_hat_conn(self, conn: sqlite3.Connection, data: dict[str, Any]) -> None:
+    def _save_hat_conn(self, conn: sqlite3.Connection, data: JsonObject) -> None:
         data = dict(data)
         data["updated_at"] = now_iso()
         conn.execute(
@@ -124,28 +126,41 @@ class ClusterStore:
             (data["id"], json.dumps(data, sort_keys=True), data["updated_at"]),
         )
 
+    def _seed_hat_conn(self, conn: sqlite3.Connection, data: JsonObject) -> None:
+        """Insert a built-in hat without overwriting a user's local customisation."""
+        data = dict(data)
+        data["updated_at"] = now_iso()
+        conn.execute(
+            """
+            insert into hats (id, data_json, updated_at)
+            values (?, ?, ?)
+            on conflict(id) do nothing
+            """,
+            (data["id"], json.dumps(data, sort_keys=True), data["updated_at"]),
+        )
+
     def delete_hat(self, hat_id: str) -> None:
         with self.connect() as conn:
             conn.execute("delete from hats where id = ?", (hat_id,))
 
-    def list_topologies(self) -> list[dict[str, Any]]:
+    def list_topologies(self) -> list[JsonObject]:
         with self.connect() as conn:
             rows = conn.execute("select data_json from topologies order by updated_at desc").fetchall()
         return [json.loads(row["data_json"]) for row in rows]
 
-    def get_topology(self, topology_id: str) -> dict[str, Any] | None:
+    def get_topology(self, topology_id: str) -> JsonObject | None:
         with self.connect() as conn:
             row = conn.execute("select data_json from topologies where id = ?", (topology_id,)).fetchone()
         return json.loads(row["data_json"]) if row else None
 
-    def save_topology(self, data: dict[str, Any]) -> dict[str, Any]:
+    def save_topology(self, data: JsonObject) -> JsonObject:
         if not data.get("id"):
             data["id"] = f"topology_{uuid.uuid4().hex[:8]}"
         with self.connect() as conn:
             self._save_topology_conn(conn, data)
         return data
 
-    def _save_topology_conn(self, conn: sqlite3.Connection, data: dict[str, Any]) -> None:
+    def _save_topology_conn(self, conn: sqlite3.Connection, data: JsonObject) -> None:
         data = dict(data)
         data["updated_at"] = now_iso()
         conn.execute(
@@ -174,8 +189,8 @@ class ClusterStore:
         *,
         topology_id: str,
         task: str,
-        blackboard: dict[str, Any],
-    ) -> dict[str, Any]:
+        blackboard: JsonObject,
+    ) -> JsonObject:
         run = {
             "id": f"run_{uuid.uuid4().hex[:10]}",
             "topology_id": topology_id,
@@ -213,7 +228,7 @@ class ClusterStore:
                 (now_iso(), run_id),
             )
 
-    def update_run(self, run_id: str, *, status: str, blackboard: dict[str, Any], final_result: str) -> None:
+    def update_run(self, run_id: str, *, status: str, blackboard: JsonObject, final_result: str) -> None:
         with self.connect() as conn:
             conn.execute(
                 """
@@ -231,21 +246,28 @@ class ClusterStore:
                 (now_iso(), run_id),
             )
 
-    def mark_run_failed(self, run_id: str) -> None:
+    def mark_run_failed(self, run_id: str, *, error: str = "") -> None:
+        final_result = error or "Run failed before producing a final result."
         with self.connect() as conn:
             conn.execute(
-                "update runs set status = 'failed', updated_at = ? where id = ?",
-                (now_iso(), run_id),
+                """
+                update runs
+                set status = 'failed',
+                    final_result = case when final_result = '' then ? else final_result end,
+                    updated_at = ?
+                where id = ?
+                """,
+                (final_result, now_iso(), run_id),
             )
 
-    def get_run(self, run_id: str) -> dict[str, Any] | None:
+    def get_run(self, run_id: str) -> JsonObject | None:
         with self.connect() as conn:
             row = conn.execute("select * from runs where id = ?", (run_id,)).fetchone()
         if not row:
             return None
         return run_from_row(row)
 
-    def list_runs(self, limit: int = 20) -> list[dict[str, Any]]:
+    def list_runs(self, limit: int = 20) -> list[JsonObject]:
         with self.connect() as conn:
             rows = conn.execute("select * from runs order by created_at desc limit ?", (limit,)).fetchall()
         return [run_from_row(row) for row in rows]
@@ -260,10 +282,10 @@ class ClusterStore:
         hat_name: str | None = None,
         prompt: str = "",
         output: str = "",
-        blackboard_before: dict[str, Any] | None = None,
-        blackboard_after: dict[str, Any] | None = None,
-        metadata: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
+        blackboard_before: JsonObject | None = None,
+        blackboard_after: JsonObject | None = None,
+        metadata: JsonObject | None = None,
+    ) -> JsonObject:
         event = {
             "run_id": run_id,
             "seq": seq,
@@ -301,13 +323,13 @@ class ClusterStore:
             )
         return event
 
-    def list_events(self, run_id: str) -> list[dict[str, Any]]:
+    def list_events(self, run_id: str) -> list[JsonObject]:
         with self.connect() as conn:
             rows = conn.execute("select * from run_events where run_id = ? order by seq asc", (run_id,)).fetchall()
         return [event_from_row(row) for row in rows]
 
 
-def run_from_row(row: sqlite3.Row) -> dict[str, Any]:
+def run_from_row(row: sqlite3.Row) -> JsonObject:
     return {
         "id": row["id"],
         "topology_id": row["topology_id"],
@@ -320,7 +342,7 @@ def run_from_row(row: sqlite3.Row) -> dict[str, Any]:
     }
 
 
-def event_from_row(row: sqlite3.Row) -> dict[str, Any]:
+def event_from_row(row: sqlite3.Row) -> JsonObject:
     return {
         "id": row["id"],
         "run_id": row["run_id"],

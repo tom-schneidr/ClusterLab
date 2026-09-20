@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import socket
 import sys
 from pathlib import Path
@@ -19,7 +20,10 @@ def port_is_busy(host: str, port: int) -> bool:
 
 def main() -> None:
     app_root = Path(__file__).resolve().parent.parent
-    load_dotenv(app_root / ".env")
+    env_file = app_root / ".env"
+    if not env_file.exists():
+        env_file = Path.cwd() / ".env"
+    load_dotenv(env_file)
     settings = load_settings(root=app_root)
     parser = argparse.ArgumentParser(description="Start the ClusterLab local server.")
     parser.add_argument("--host", default=settings.host, help=f"Bind address (default: {settings.host})")
@@ -29,7 +33,15 @@ def main() -> None:
         action="store_true",
         help="Enable auto-reload on code changes (can be unstable on Windows/Google Drive)",
     )
+    parser.add_argument(
+        "--offline-demo",
+        action="store_true",
+        help="Run with deterministic local responses instead of calling an LLM provider",
+    )
     args = parser.parse_args()
+
+    if args.offline_demo:
+        os.environ["CLUSTERLAB_LLM_MODE"] = "offline-demo"
 
     if port_is_busy(args.host, args.port):
         print(

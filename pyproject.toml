@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "clusterlab"
 version = "0.1.0"
@@ -18,8 +22,10 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+  "build>=1.2,<2",
   "httpx>=0.27,<1",
-  "pytest>=8.0,<9",
+  "pip-audit>=2.10,<3",
+  "pytest>=8.0,<10",
   "ruff>=0.8,<1"
 ]
 
@@ -32,6 +38,28 @@ exclude = ["tests*"]
 
 [tool.setuptools]
 py-modules = ["app"]
+
+[tool.setuptools.data-files]
+"static" = ["static/index.html", "static/app.js", "static/styles.css"]
+"static/js" = [
+  "static/js/api.js",
+  "static/js/config.js",
+  "static/js/constants.js",
+  "static/js/dom.js",
+  "static/js/selectors.js",
+  "static/js/state.js",
+]
+"static/js/graph" = [
+  "static/js/graph/constants.js",
+  "static/js/graph/execution.js",
+  "static/js/graph/index.js",
+  "static/js/graph/interaction.js",
+  "static/js/graph/layout.js",
+  "static/js/graph/ports.js",
+  "static/js/graph/render.js",
+  "static/js/graph/viewport.js",
+]
+"static/js/ui" = ["static/js/ui/hats.js"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
