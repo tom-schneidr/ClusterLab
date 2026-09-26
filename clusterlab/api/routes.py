@@ -117,9 +117,18 @@ def create_api_router(store: ClusterStore, *, settings: Settings) -> APIRouter:
 
     @router.post("/runs/{run_id}/stop")
     def stop_run(run_id: str) -> dict[str, str]:
-        if not store.get_run(run_id):
+        run = store.get_run(run_id)
+        if not run:
             raise not_found("run", run_id)
-        store.mark_run_stopped(run_id)
+        if run["status"] not in {"queued", "running"} or not store.mark_run_stopped(run_id):
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "run_not_active",
+                    "message": f"Run is already {run['status']} and cannot be stopped.",
+                    "status": run["status"],
+                },
+            )
         return {"status": "stopped"}
 
     return router

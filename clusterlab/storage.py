@@ -239,12 +239,17 @@ class ClusterStore:
                 (status, json.dumps(blackboard, sort_keys=True), final_result, now_iso(), run_id),
             )
 
-    def mark_run_stopped(self, run_id: str) -> None:
+    def mark_run_stopped(self, run_id: str) -> bool:
         with self.connect() as conn:
-            conn.execute(
-                "update runs set status = 'stopped', updated_at = ? where id = ?",
+            cursor = conn.execute(
+                """
+                update runs
+                set status = 'stopped', updated_at = ?
+                where id = ? and status in ('queued', 'running')
+                """,
                 (now_iso(), run_id),
             )
+        return cursor.rowcount == 1
 
     def mark_run_failed(self, run_id: str, *, error: str = "") -> None:
         final_result = error or "Run failed before producing a final result."

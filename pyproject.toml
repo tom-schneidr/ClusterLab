@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "clusterlab"
 version = "0.1.0"
-description = "A local-first workbench for experimenting with cognitive agent clusters."
+description = "A local-first workbench for designing and tracing multi-agent workflows."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"

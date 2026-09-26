@@ -46,6 +46,17 @@ def test_run_lifecycle_starts_queued_then_running(tmp_path) -> None:
     assert store.get_run(run["id"])["status"] == "running"
 
 
+def test_mark_run_stopped_only_transitions_active_runs(tmp_path) -> None:
+    store = ClusterStore(tmp_path / "clusterlab.db")
+    store.initialize()
+    run = store.create_run(topology_id="topology", task="task", blackboard={"goal": "task"})
+
+    assert store.mark_run_stopped(run["id"]) is True
+    assert store.get_run(run["id"])["status"] == "stopped"
+    assert store.mark_run_stopped(run["id"]) is False
+    assert store.get_run(run["id"])["status"] == "stopped"
+
+
 def test_mark_run_failed_persists_diagnostic_without_overwriting_result(tmp_path) -> None:
     store = ClusterStore(tmp_path / "clusterlab.db")
     store.initialize()

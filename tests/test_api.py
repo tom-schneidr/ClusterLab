@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 from fastapi.testclient import TestClient
 
 from clusterlab.app_factory import create_app
@@ -106,3 +108,30 @@ def test_stop_missing_run_returns_404(tmp_path) -> None:
 
     assert response.status_code == 404
     assert response.json()["detail"]["code"] == "not_found"
+
+
+def test_stop_completed_run_returns_conflict_without_changing_status(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("CLUSTERLAB_LLM_MODE", "offline-demo")
+    app = create_app(data_dir=tmp_path)
+    client = TestClient(app)
+    topology_id = client.get("/api/bootstrap").json()["topologies"][0]["id"]
+
+    started = client.post(
+        "/api/runs/start",
+        json={"topology_id": topology_id, "task": "Test completed-run stop protection."},
+    )
+    assert started.status_code == 200
+    run_id = started.json()["id"]
+
+    for _ in range(100):
+        current = client.get(f"/api/runs/{run_id}").json()
+        if current["status"] in {"completed", "failed", "stopped"}:
+            break
+        time.sleep(0.01)
+
+    assert current["status"] == "completed"
+    response = client.post(f"/api/runs/{run_id}/stop")
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "run_not_active"
+    assert client.get(f"/api/runs/{run_id}").json()["status"] == "completed"
